@@ -174,6 +174,12 @@ class MainWindow(QMainWindow):
         button_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.find_tkb_btn = QPushButton("Tìm TKB hợp lệ")
         self.prev_tkb_btn = QPushButton("< TKB Trước")
+        
+        # Label hiển thị số thời khóa biểu hiện tại/tổng số (giữa 2 nút)
+        self.tkb_info_label = QLabel("Chưa có thời khóa biểu")
+        self.tkb_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tkb_info_label.setStyleSheet("font-weight: bold; padding: 5px;")
+        
         self.next_tkb_btn = QPushButton("TKB Tiếp >")
         self.add_subject_btn = QPushButton("Thêm Môn")
         self.save_tkb_btn = QPushButton("Lưu TKB")
@@ -189,6 +195,7 @@ class MainWindow(QMainWindow):
 
         button_layout.addWidget(self.find_tkb_btn)
         button_layout.addWidget(self.prev_tkb_btn)
+        button_layout.addWidget(self.tkb_info_label)  # Label ở giữa 2 nút
         button_layout.addWidget(self.next_tkb_btn)
         button_layout.addStretch()
         button_layout.addWidget(self.add_subject_btn)
@@ -501,10 +508,12 @@ class MainWindow(QMainWindow):
             self.log_message(error_msg)
             self.schedule_view.display_schedule([], self.all_courses)
             self.current_tkb_index = -1
+            self.update_tkb_info_label()
         elif not self.danh_sach_tkb_tim_duoc:
             self.log_message("Không tìm thấy TKB nào phù hợp.")
             self.schedule_view.display_schedule([], self.all_courses)
             self.current_tkb_index = -1
+            self.update_tkb_info_label()
         else:
             self.log_message(f"Tìm thấy {len(self.danh_sach_tkb_tim_duoc)} TKB phù hợp!")
             self.show_tkb_at_index(0)
@@ -518,6 +527,8 @@ class MainWindow(QMainWindow):
         tkb = self.danh_sach_tkb_tim_duoc[index]
         self.schedule_view.display_schedule(tkb, self.all_courses)
         self.statusBar().showMessage(f"Đang xem TKB {index + 1} / {len(self.danh_sach_tkb_tim_duoc)}")
+        # Cập nhật label hiển thị số thời khóa biểu
+        self.update_tkb_info_label()
 
     def show_next_tkb(self):
         """Hiển thị TKB tiếp theo"""
@@ -546,6 +557,7 @@ class MainWindow(QMainWindow):
         self.danh_sach_tkb_tim_duoc = []
         self.current_tkb_index = -1
         self.schedule_view.display_schedule([], self.all_courses)
+        self.update_tkb_info_label()
         self.log_message("Đã xoá kết quả tìm kiếm TKB.")
         self.statusBar().showMessage("Sẵn sàng")
         self.update_nav_buttons()
@@ -587,6 +599,15 @@ class MainWindow(QMainWindow):
         self.notification_browser.append(
             f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}"
         )
+
+    def update_tkb_info_label(self):
+        """Cập nhật label hiển thị số thời khóa biểu hiện tại/tổng số"""
+        if not self.danh_sach_tkb_tim_duoc or self.current_tkb_index == -1:
+            self.tkb_info_label.setText("Chưa có thời khóa biểu")
+        else:
+            current = self.current_tkb_index + 1
+            total = len(self.danh_sach_tkb_tim_duoc)
+            self.tkb_info_label.setText(f"Thời khóa biểu: {current}/{total}")
 
     def handle_input_completed_courses(self):
         """Xử lý nhập môn đã học"""
