@@ -19,6 +19,7 @@ class ScheduleWidget(QWidget):
         super().__init__(parent)
         self.setMinimumSize(800, 600)
         self.current_schedule = []
+        self.busy_times = []  # Danh sách giờ bận
         self.CELL_WIDTH = 120
         self.CELL_HEIGHT = 50
         self.HEADER_HEIGHT = 60
@@ -65,7 +66,8 @@ class ScheduleWidget(QWidget):
         self.CELL_WIDTH = (self.width() - self.TIME_COL_WIDTH) / len(TEN_THU_TRONG_TUAN)
         self.CELL_HEIGHT = (self.height() - self.HEADER_HEIGHT) / self.MAX_TIET
         self._draw_grid(painter)
-        self._draw_schedule(painter)
+        self._draw_busy_times(painter)  # Vẽ giờ bận trước (lớp nền)
+        self._draw_schedule(painter)  # Vẽ lớp học lên trên
         painter.end()
 
     def _is_dark_mode(self):
@@ -128,6 +130,64 @@ class ScheduleWidget(QWidget):
             x = self.TIME_COL_WIDTH + i * self.CELL_WIDTH
             painter.drawLine(int(x), 0, int(x), self.height())
             
+    def _draw_busy_times(self, painter):
+        """Vẽ các giờ bận lên lưới với màu trắng, giống như các môn học"""
+        if not self.busy_times:
+            return
+        
+        is_dark = self._is_dark_mode()
+        # Màu trắng cho giờ bận
+        busy_color = QColor("#ffffff")
+        border_color = QColor("#888888") if is_dark else QColor("#666666")
+        text_color = QColor("#000000")  # Text màu đen để nổi bật trên nền trắng
+        
+        for busy_time in self.busy_times:
+            # Chuyển đổi giờ sang tiết
+            tiet_bd = busy_time.time_to_tiet(busy_time.gio_bat_dau)
+            tiet_kt = busy_time.time_to_tiet(busy_time.gio_ket_thuc)
+            
+            # Nếu không tìm được tiết chính xác, tìm tiết gần nhất
+            from ..models import LichBan
+            if tiet_bd == -1:
+                tiet_bd = LichBan._find_nearest_tiet(busy_time.gio_bat_dau)
+            if tiet_kt == -1:
+                tiet_kt = LichBan._find_nearest_tiet(busy_time.gio_ket_thuc)
+            
+            if tiet_bd == -1 or tiet_kt == -1:
+                continue  # Bỏ qua nếu không chuyển đổi được
+            
+            # Đảm bảo tiet_bd <= tiet_kt
+            if tiet_bd > tiet_kt:
+                tiet_bd, tiet_kt = tiet_kt, tiet_bd
+            
+            thu_index = busy_time.thu - 2  # 2 (Thứ 2) -> index 0
+            if 0 <= thu_index < len(TEN_THU_TRONG_TUAN):
+                x = self.TIME_COL_WIDTH + thu_index * self.CELL_WIDTH
+                y = self.HEADER_HEIGHT + (tiet_bd - 1) * self.CELL_HEIGHT
+                rect_width = self.CELL_WIDTH
+                rect_height = (tiet_kt - tiet_bd + 1) * self.CELL_HEIGHT
+                
+                # Vẽ vùng giờ bận với màu trắng, giống như các môn học
+                painter.setBrush(QBrush(busy_color))
+                painter.setPen(QPen(border_color, 1))
+                painter.drawRoundedRect(int(x)+2, int(y)+2, int(rect_width)-4, 
+                                      int(rect_height)-4, 5, 5)
+                
+                # Vẽ text với thông tin giờ bận và lý do
+                painter.setPen(text_color)
+                painter.setFont(QFont("Segoe UI", 12))
+                text_rect = int(x)+5, int(y)+5, int(rect_width)-10, int(rect_height)-10
+                text_flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
+                
+                # Format text hiển thị thông tin giờ bận và lý do
+                gio_bd_str = busy_time.gio_bat_dau.toString("HH:mm")
+                gio_kt_str = busy_time.gio_ket_thuc.toString("HH:mm")
+                ten_thu = TEN_THU_TRONG_TUAN.get(busy_time.thu, f"Thứ {busy_time.thu}")
+                text_content = f"Giờ bận\n{ten_thu}\n{gio_bd_str} - {gio_kt_str}\n{busy_time.ly_do}"
+                
+                painter.drawText(text_rect[0], text_rect[1], text_rect[2], text_rect[3], 
+                               text_flags, text_content)
+    
     def _draw_schedule(self, painter):
         """Vẽ các lớp học lên lưới"""
         is_dark = self._is_dark_mode()
@@ -155,9 +215,10 @@ class ScheduleWidget(QWidget):
                     painter.drawText(text_rect[0], text_rect[1], text_rect[2], text_rect[3], 
                                    text_flags, text_content)
 
-    def display_schedule(self, tkb, all_courses):
+    def display_schedule(self, tkb, all_courses, busy_times=None):
         """Hiển thị một thời khóa biểu lên widget"""
         self.current_schedule = tkb
+        self.busy_times = busy_times or []
         self.schedule_colors.clear()
         for ma_mon, mon_hoc in all_courses.items():
             if mon_hoc.color_hex:

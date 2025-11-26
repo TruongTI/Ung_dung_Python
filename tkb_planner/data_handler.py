@@ -6,8 +6,10 @@ import json
 import os
 from PyQt6.QtWidgets import QMessageBox
 
-from .constants import DATA_FILE, COMPLETED_COURSES_FILE
-from .models import MonHoc, LopHoc, ThoiGianHoc
+from PyQt6.QtCore import QTime
+
+from .constants import DATA_FILE, COMPLETED_COURSES_FILE, BUSY_TIMES_FILE
+from .models import MonHoc, LopHoc, ThoiGianHoc, LichBan
 
 
 def save_data(all_courses_dict):
@@ -127,5 +129,69 @@ def load_completed_courses():
         return []
     except Exception as e:
         QMessageBox.critical(None, "Lỗi Tải", f"Không thể đọc file môn đã học: {e}")
+        return []
+
+
+def save_busy_times(busy_times_list):
+    """
+    Lưu danh sách giờ bận vào file JSON
+    
+    Args:
+        busy_times_list: List các đối tượng LichBan
+    
+    Returns:
+        True nếu lưu thành công, False nếu có lỗi
+    """
+    try:
+        data_to_save = []
+        for busy_time in busy_times_list:
+            data_to_save.append({
+                'thu': busy_time.thu,
+                'gio_bat_dau': busy_time.gio_bat_dau.toString('HH:mm'),
+                'gio_ket_thuc': busy_time.gio_ket_thuc.toString('HH:mm'),
+                'ly_do': busy_time.ly_do,
+                'id': busy_time.id
+            })
+        with open(BUSY_TIMES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception as e:
+        QMessageBox.critical(None, "Lỗi Lưu", f"Không thể lưu danh sách giờ bận: {e}")
+        return False
+
+
+def load_busy_times():
+    """
+    Tải danh sách giờ bận từ file JSON
+    
+    Returns:
+        List các đối tượng LichBan
+    """
+    if not os.path.exists(BUSY_TIMES_FILE):
+        return []
+    
+    try:
+        with open(BUSY_TIMES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        busy_times = []
+        for item in data:
+            # Parse thời gian từ string "HH:mm"
+            gio_bd_parts = item['gio_bat_dau'].split(':')
+            gio_kt_parts = item['gio_ket_thuc'].split(':')
+            gio_bat_dau = QTime(int(gio_bd_parts[0]), int(gio_bd_parts[1]))
+            gio_ket_thuc = QTime(int(gio_kt_parts[0]), int(gio_kt_parts[1]))
+            
+            busy_time = LichBan(
+                item['thu'],
+                gio_bat_dau,
+                gio_ket_thuc,
+                item['ly_do'],
+                item['id']
+            )
+            busy_times.append(busy_time)
+        return busy_times
+    except Exception as e:
+        QMessageBox.critical(None, "Lỗi Tải", f"Không thể đọc file giờ bận: {e}")
         return []
 

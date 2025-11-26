@@ -7,16 +7,17 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QLabel, QLineEdit, QPushButton, QCheckBox, QScrollArea, QFrame,
     QTextBrowser, QStatusBar, QFileDialog, QMessageBox,
-    QDateEdit, QTimeEdit, QSizePolicy
+    QTimeEdit, QSizePolicy, QComboBox
 )
-from PyQt6.QtCore import Qt, QDate, QTime, QSettings
+from PyQt6.QtCore import Qt, QTime, QSettings
 from PyQt6.QtGui import QFont, QAction
 
 from ..models import MonHoc, LopHoc, LichBan
 from ..scheduler import tim_thoi_khoa_bieu
 from ..data_handler import (
     save_data, load_data, create_sample_data_if_not_exists,
-    save_completed_courses, load_completed_courses
+    save_completed_courses, load_completed_courses,
+    save_busy_times, load_busy_times
 )
 from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN
 from .schedule_widget import ScheduleWidget
@@ -41,19 +42,23 @@ class MainWindow(QMainWindow):
         
         create_sample_data_if_not_exists()
         self.all_courses = load_data()
-        self.danh_sach_gio_ban = []
+        self.danh_sach_gio_ban = load_busy_times()  # Load giờ bận từ file
         self.danh_sach_tkb_tim_duoc = []
         self.current_tkb_index = -1
         self.course_widgets = {}
         self.busy_time_widgets = {}
+        self.busy_time_checkboxes = {}  # Lưu checkbox của từng giờ bận
         self.toggle_theme_action = None  # Khởi tạo trước
         # Danh sách môn đã học
         self.completed_courses = load_completed_courses()
         self._setup_ui()
         self._setup_menu_bar()
         self._populate_course_list()
+        self._populate_busy_times()  # Load và hiển thị giờ bận đã lưu
         self._connect_signals()
         self.apply_theme()  # Áp dụng theme sau khi setup UI
+        # Hiển thị giờ bận ngay khi khởi động
+        self._update_schedule_display()
         self.log_message("Chào mừng! Chọn môn học và giờ bận để bắt đầu.")
 
     def _setup_ui(self):
@@ -95,16 +100,15 @@ class MainWindow(QMainWindow):
         busy_layout = QVBoxLayout(busy_group)
         busy_layout.setSpacing(8)  # Thêm khoảng cách giữa các hàng
         
-        # Hàng 1: Ngày và Lý do
+        # Hàng 1: Thứ và Lý do
         busy_input_layout1 = QHBoxLayout()
         busy_input_layout1.setSpacing(8)
-        date_label = QLabel("Ngày:")
-        date_label.setMinimumWidth(40)
-        self.busy_date_edit = QDateEdit(QDate.currentDate())
-        self.busy_date_edit.setCalendarPopup(True)
-        self.busy_date_edit.setDisplayFormat("dd/MM/yyyy")  # Format hiển thị đầy đủ ngày
-        self.busy_date_edit.setMinimumWidth(120)  # Tăng chiều rộng tối thiểu
-        self.busy_date_edit.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        thu_label = QLabel("Thứ:")
+        thu_label.setMinimumWidth(40)
+        self.busy_thu_combo = QComboBox()
+        self.busy_thu_combo.addItems(TEN_THU_TRONG_TUAN.values())
+        self.busy_thu_combo.setMinimumWidth(120)
+        self.busy_thu_combo.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         
         reason_label = QLabel("Lý do:")
         reason_label.setMinimumWidth(40)
@@ -112,8 +116,8 @@ class MainWindow(QMainWindow):
         self.busy_reason_input.setPlaceholderText("Nhập lý do bận...")
         self.busy_reason_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         
-        busy_input_layout1.addWidget(date_label, 0)
-        busy_input_layout1.addWidget(self.busy_date_edit, 0)
+        busy_input_layout1.addWidget(thu_label, 0)
+        busy_input_layout1.addWidget(self.busy_thu_combo, 0)
         busy_input_layout1.addWidget(reason_label, 0)
         busy_input_layout1.addWidget(self.busy_reason_input, 1)  # Ô lý do chiếm không gian còn lại
         
@@ -452,7 +456,8 @@ class MainWindow(QMainWindow):
             # Xóa kết quả tìm kiếm TKB
             self.danh_sach_tkb_tim_duoc = []
             self.current_tkb_index = -1
-            self.schedule_view.display_schedule([], self.all_courses)
+            active_busy_times = self._get_active_busy_times()
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
             self.update_tkb_info_label()
             
             # Xóa danh sách giờ bận
@@ -505,10 +510,39 @@ class MainWindow(QMainWindow):
             mon_hoc = self.all_courses[ma_mon]
             text_to_check = f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})".lower()
             widgets['container'].setVisible(filter_text in text_to_check)
+    
+    def _populate_busy_times(self):
+        """Load và hiển thị danh sách giờ bận đã lưu"""
+        for busy_time in self.danh_sach_gio_ban:
+            busy_id = busy_time.id
+            container = QFrame()
+            container.setFrameShape(QFrame.Shape.StyledPanel)
+            layout = QHBoxLayout(container)
+            layout.setContentsMargins(5, 3, 5, 3)
+            layout.setSpacing(5)
+            
+            check = CustomCheckBox(str(busy_time))
+            check.setChecked(True)  # Mặc định tích
+            check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            check.toggled.connect(lambda: self._update_schedule_display())  # Cập nhật khi toggle
+            
+            delete_btn = QPushButton("Xoá")
+            delete_btn.setMinimumWidth(55)
+            delete_btn.setMaximumWidth(70)
+            delete_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+            
+            layout.addWidget(check, 1)
+            layout.addWidget(delete_btn, 0)
+            delete_btn.clicked.connect(lambda _, bid=busy_id: self.handle_delete_busy_time(bid))
+            self.busy_list_layout.addWidget(container)
+            self.busy_time_widgets[busy_id] = container
+            self.busy_time_checkboxes[busy_id] = check
             
     def handle_add_busy_time(self):
         """Xử lý thêm giờ bận"""
-        date = self.busy_date_edit.date()
+        ten_thu = self.busy_thu_combo.currentText()
+        # Tìm thứ từ tên thứ
+        thu = [k for k, v in TEN_THU_TRONG_TUAN.items() if v == ten_thu][0]
         start_time = self.busy_start_time.time()
         end_time = self.busy_end_time.time()
         reason = self.busy_reason_input.text() or "Bận"
@@ -516,7 +550,6 @@ class MainWindow(QMainWindow):
             self.log_message("Lỗi: Giờ bắt đầu phải trước giờ kết thúc.")
             return
         
-        thu = date.dayOfWeek() + 1  # Monday=1 -> 2, Sunday=7 -> 8
         busy_id = datetime.datetime.now().timestamp()
         new_busy_time = LichBan(thu, start_time, end_time, reason, busy_id)
         self.danh_sach_gio_ban.append(new_busy_time)
@@ -530,6 +563,7 @@ class MainWindow(QMainWindow):
         check = CustomCheckBox(str(new_busy_time))
         check.setChecked(True)
         check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        check.toggled.connect(lambda: self._update_schedule_display())  # Cập nhật khi toggle
         
         delete_btn = QPushButton("Xoá")
         delete_btn.setMinimumWidth(55)  # Thay vì setFixedWidth
@@ -541,7 +575,14 @@ class MainWindow(QMainWindow):
         delete_btn.clicked.connect(lambda: self.handle_delete_busy_time(busy_id))
         self.busy_list_layout.addWidget(container)
         self.busy_time_widgets[busy_id] = container
+        self.busy_time_checkboxes[busy_id] = check
         self.log_message(f"Đã thêm giờ bận: {new_busy_time}")
+        
+        # Lưu vào file
+        save_busy_times(self.danh_sach_gio_ban)
+        
+        # Cập nhật hiển thị giờ bận trên lịch (SAU KHI đã thêm checkbox)
+        self._update_schedule_display()
 
     def handle_delete_busy_time(self, busy_id):
         """Xử lý xóa giờ bận"""
@@ -549,7 +590,13 @@ class MainWindow(QMainWindow):
         if busy_id in self.busy_time_widgets:
             self.busy_time_widgets[busy_id].deleteLater()
             del self.busy_time_widgets[busy_id]
+        if busy_id in self.busy_time_checkboxes:
+            del self.busy_time_checkboxes[busy_id]
         self.log_message("Đã xoá một giờ bận.")
+        # Lưu vào file
+        save_busy_times(self.danh_sach_gio_ban)
+        # Cập nhật hiển thị giờ bận trên lịch
+        self._update_schedule_display()
 
     def handle_find_tkb(self):
         """Tìm kiếm thời khóa biểu hợp lệ"""
@@ -567,7 +614,8 @@ class MainWindow(QMainWindow):
             for ma_mon, widgets in self.course_widgets.items() 
             if widgets['check'].isChecked() and widgets['mandatory'].isChecked()
         ]
-        active_busy_times = self.danh_sach_gio_ban
+        # Chỉ lấy giờ bận được tích checkbox
+        active_busy_times = self._get_active_busy_times()
         self.log_message("Đang tìm kiếm TKB...")
         QApplication.processEvents()
         self.danh_sach_tkb_tim_duoc, error_msg = tim_thoi_khoa_bieu(
@@ -575,12 +623,12 @@ class MainWindow(QMainWindow):
         )
         if error_msg:
             self.log_message(error_msg)
-            self.schedule_view.display_schedule([], self.all_courses)
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
             self.current_tkb_index = -1
             self.update_tkb_info_label()
         elif not self.danh_sach_tkb_tim_duoc:
             self.log_message("Không tìm thấy TKB nào phù hợp.")
-            self.schedule_view.display_schedule([], self.all_courses)
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
             self.current_tkb_index = -1
             self.update_tkb_info_label()
         else:
@@ -594,7 +642,8 @@ class MainWindow(QMainWindow):
             return
         self.current_tkb_index = index
         tkb = self.danh_sach_tkb_tim_duoc[index]
-        self.schedule_view.display_schedule(tkb, self.all_courses)
+        active_busy_times = self._get_active_busy_times()
+        self.schedule_view.display_schedule(tkb, self.all_courses, active_busy_times)
         self.statusBar().showMessage(f"Đang xem TKB {index + 1} / {len(self.danh_sach_tkb_tim_duoc)}")
         # Cập nhật label hiển thị số thời khóa biểu
         self.update_tkb_info_label()
@@ -625,11 +674,28 @@ class MainWindow(QMainWindow):
         """Xóa kết quả tìm kiếm TKB"""
         self.danh_sach_tkb_tim_duoc = []
         self.current_tkb_index = -1
-        self.schedule_view.display_schedule([], self.all_courses)
+        active_busy_times = self._get_active_busy_times()
+        self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
         self.update_tkb_info_label()
         self.log_message("Đã xoá kết quả tìm kiếm TKB.")
         self.statusBar().showMessage("Sẵn sàng")
         self.update_nav_buttons()
+    
+    def _get_active_busy_times(self):
+        """Lấy danh sách giờ bận được tích checkbox"""
+        return [
+            b for b in self.danh_sach_gio_ban 
+            if b.id in self.busy_time_checkboxes and self.busy_time_checkboxes[b.id].isChecked()
+        ]
+    
+    def _update_schedule_display(self):
+        """Cập nhật hiển thị lịch với giờ bận hiện tại (chỉ hiển thị giờ bận được tích checkbox)"""
+        active_busy_times = self._get_active_busy_times()
+        if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+            tkb = self.danh_sach_tkb_tim_duoc[self.current_tkb_index]
+            self.schedule_view.display_schedule(tkb, self.all_courses, active_busy_times)
+        else:
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
 
     def handle_save_tkb(self):
         """Lưu TKB hiện tại ra file"""

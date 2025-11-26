@@ -12,4 +12,6 @@ TEN_THU_TRONG_TUAN = {
 DATA_FILE = "data_TKB_pro.json"
 # Tên file lưu môn đã học
 COMPLETED_COURSES_FILE = "completed_courses.json"
+# Tên file lưu giờ bận
+BUSY_TIMES_FILE = "busy_times.json"
 
