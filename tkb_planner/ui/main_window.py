@@ -667,7 +667,7 @@ class MainWindow(QMainWindow):
 
     def handle_show_course_classes(self, mon_hoc):
         """Hiển thị dialog các lớp học của môn học"""
-        dialog = CourseClassesDialog(mon_hoc, self)
+        dialog = CourseClassesDialog(mon_hoc, all_courses=self.all_courses, parent=self)
         if dialog.exec():
             # Xử lý các lớp đã xóa
             deleted_classes = dialog.get_deleted_classes()

@@ -57,7 +57,7 @@ class SubjectDialog(QDialog):
 class ClassDialog(QDialog):
     """Dialog để thêm lớp học mới"""
     
-    def __init__(self, all_courses, default_thu=None, default_tiet=None, parent=None):
+    def __init__(self, all_courses, default_thu=None, default_tiet=None, fixed_mon_hoc=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Thêm Lớp học mới")
         self.all_courses = all_courses
@@ -65,6 +65,10 @@ class ClassDialog(QDialog):
         
         self.mon_hoc_combo = QComboBox()
         self.mon_hoc_combo.addItems(sorted(all_courses.keys()))
+        # Nếu có fixed_mon_hoc, set và disable combo box
+        if fixed_mon_hoc:
+            self.mon_hoc_combo.setCurrentText(fixed_mon_hoc.ma_mon)
+            self.mon_hoc_combo.setEnabled(False)
         self.ma_lop_edit = QLineEdit()
         self.ten_gv_edit = QLineEdit()
         # Combo box để chọn loại lớp
