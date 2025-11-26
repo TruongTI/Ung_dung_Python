@@ -82,7 +82,7 @@ class CustomCheckBox(QCheckBox):
             # Vẽ checkmark hình chữ V với thanh trái thẳng đứng, cao hơn, gần thanh phải hơn
             # Điểm bắt đầu: trái (cao hơn, gần giữa trên)
             start_x = indicator_x + 5
-            start_y = indicator_y + 9  # Bắt đầu từ trên, cao hơn
+            start_y = indicator_y + 10  # Bắt đầu từ trên, cao hơn
             # Điểm giữa: gần giữa dưới (đỉnh của chữ V, gần nhau hơn)
             mid_x = indicator_x + indicator_size // 2 - 1  # Gần nhau hơn (chỉ cách 1px)
             mid_y = indicator_y + indicator_size - 5  # Điểm thấp nhất của chữ V

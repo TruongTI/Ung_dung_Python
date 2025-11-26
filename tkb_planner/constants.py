@@ -10,4 +10,6 @@ TEN_THU_TRONG_TUAN = {
 
 # Tên file lưu dữ liệu
 DATA_FILE = "data_TKB_pro.json"
+# Tên file lưu môn đã học
+COMPLETED_COURSES_FILE = "completed_courses.json"
 

@@ -6,7 +6,7 @@ import json
 import os
 from PyQt6.QtWidgets import QMessageBox
 
-from .constants import DATA_FILE
+from .constants import DATA_FILE, COMPLETED_COURSES_FILE
 from .models import MonHoc, LopHoc, ThoiGianHoc
 
 
@@ -110,4 +110,45 @@ def create_sample_data_if_not_exists():
         "Tạo dữ liệu", 
         f"Chưa có file dữ liệu. Đã tạo file mẫu tại {DATA_FILE}"
     )
+
+
+def save_completed_courses(completed_courses_list):
+    """
+    Lưu danh sách môn đã học vào file JSON
+    
+    Args:
+        completed_courses_list: List các mã môn đã học
+    
+    Returns:
+        True nếu lưu thành công, False nếu có lỗi
+    """
+    try:
+        with open(COMPLETED_COURSES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(completed_courses_list, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception as e:
+        QMessageBox.critical(None, "Lỗi Lưu", f"Không thể lưu danh sách môn đã học: {e}")
+        return False
+
+
+def load_completed_courses():
+    """
+    Tải danh sách môn đã học từ file JSON
+    
+    Returns:
+        List các mã môn đã học
+    """
+    if not os.path.exists(COMPLETED_COURSES_FILE):
+        return []
+    
+    try:
+        with open(COMPLETED_COURSES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # Đảm bảo trả về list
+        if isinstance(data, list):
+            return data
+        return []
+    except Exception as e:
+        QMessageBox.critical(None, "Lỗi Tải", f"Không thể đọc file môn đã học: {e}")
+        return []
 

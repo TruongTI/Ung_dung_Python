@@ -14,10 +14,13 @@ from PyQt6.QtGui import QFont, QAction
 
 from ..models import MonHoc, LopHoc, LichBan
 from ..scheduler import tim_thoi_khoa_bieu
-from ..data_handler import save_data, load_data, create_sample_data_if_not_exists
+from ..data_handler import (
+    save_data, load_data, create_sample_data_if_not_exists,
+    save_completed_courses, load_completed_courses
+)
 from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN
 from .schedule_widget import ScheduleWidget
-from .dialogs import SubjectDialog, ClassDialog
+from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCompletedCoursesDialog
 from .theme import LIGHT_THEME, DARK_THEME
 from .custom_checkbox import CustomCheckBox
 
@@ -43,6 +46,8 @@ class MainWindow(QMainWindow):
         self.course_widgets = {}
         self.busy_time_widgets = {}
         self.toggle_theme_action = None  # Khởi tạo trước
+        # Danh sách môn đã học
+        self.completed_courses = load_completed_courses()
         self._setup_ui()
         self._setup_menu_bar()
         self._populate_course_list()
@@ -240,6 +245,14 @@ class MainWindow(QMainWindow):
         tkb_menu.addAction(self.prev_tkb_btn.text(), self.show_prev_tkb)
         tkb_menu.addSeparator()
         tkb_menu.addAction(self.clear_tkb_btn.text(), self.handle_clear_tkb)
+        tkb_menu.addSeparator()
+        # Menu môn đã học
+        input_completed_action = QAction("Nhập môn đã học", self)
+        input_completed_action.triggered.connect(self.handle_input_completed_courses)
+        tkb_menu.addAction(input_completed_action)
+        view_completed_action = QAction("Xem danh sách môn đã học", self)
+        view_completed_action.triggered.connect(self.handle_view_completed_courses)
+        tkb_menu.addAction(view_completed_action)
         
         # Menu Help
         help_menu = menu_bar.addMenu("&Help")
@@ -261,9 +274,16 @@ class MainWindow(QMainWindow):
             
             check = CustomCheckBox(f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
             check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            # Disable checkbox cho các môn đã có trong danh sách môn đã học
+            if mon_hoc.ma_mon in self.completed_courses:
+                check.setEnabled(False)
+                check.setToolTip("Môn này đã được đánh dấu là đã học")
             mandatory_check = CustomCheckBox("Bắt buộc")
             mandatory_check.setToolTip("TKB tìm được phải chứa môn này")
             mandatory_check.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+            # Disable checkbox bắt buộc cho các môn đã học
+            if mon_hoc.ma_mon in self.completed_courses:
+                mandatory_check.setEnabled(False)
             
             edit_btn = QPushButton("Sửa")
             edit_btn.setMinimumWidth(55)  # Thay vì setFixedWidth để có thể co giãn
@@ -394,6 +414,10 @@ class MainWindow(QMainWindow):
         )
         if reply == QMessageBox.StandardButton.Yes:
             del self.all_courses[ma_mon]
+            # Xóa môn khỏi danh sách môn đã học nếu có
+            if ma_mon in self.completed_courses:
+                self.completed_courses.remove(ma_mon)
+                save_completed_courses(self.completed_courses)
             self._populate_course_list()
             save_data(self.all_courses)
             self.log_message(f"Đã xoá môn {ma_mon}.")
@@ -563,6 +587,58 @@ class MainWindow(QMainWindow):
         self.notification_browser.append(
             f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}"
         )
+
+    def handle_input_completed_courses(self):
+        """Xử lý nhập môn đã học"""
+        # Callback để thêm môn mới từ dialog
+        def add_course_from_dialog():
+            """Callback để thêm môn mới và trả về mã môn vừa thêm"""
+            dialog_subject = SubjectDialog(self, mon_hoc=None)
+            if dialog_subject.exec():
+                data = dialog_subject.get_data()
+                if data and data['ma_mon'] not in self.all_courses:
+                    new_mon = MonHoc(data['ma_mon'], data['ten_mon'], data['tien_quyet'])
+                    self.all_courses[data['ma_mon']] = new_mon
+                    self._populate_course_list()
+                    save_data(self.all_courses)
+                    self.log_message(f"Đã thêm môn học mới: {data['ma_mon']}")
+                    return data['ma_mon']
+                elif not data:
+                    QMessageBox.warning(self, "Lỗi", "Mã môn và Tên môn không được để trống.")
+                else:
+                    QMessageBox.warning(self, "Lỗi", f"Mã môn '{data['ma_mon']}' đã tồn tại.")
+            return None
+        
+        dialog = CompletedCoursesDialog(
+            self.all_courses, 
+            self.completed_courses, 
+            add_course_callback=add_course_from_dialog,
+            parent=self
+        )
+        if dialog.exec():
+            selected_courses = dialog.get_selected_courses()
+            self.completed_courses = selected_courses
+            if save_completed_courses(self.completed_courses):
+                self.log_message(f"Đã lưu {len(self.completed_courses)} môn đã học.")
+                QMessageBox.information(self, "Thành công", 
+                                      f"Đã lưu {len(self.completed_courses)} môn đã học.")
+            else:
+                self.log_message("Lỗi khi lưu danh sách môn đã học.")
+
+    def handle_view_completed_courses(self):
+        """Hiển thị danh sách môn đã học"""
+        dialog = ViewCompletedCoursesDialog(self.all_courses, self.completed_courses, self)
+        if dialog.exec():
+            # Cập nhật danh sách môn đã học sau khi chỉnh sửa
+            updated_courses = dialog.get_updated_completed_courses()
+            if updated_courses != self.completed_courses:
+                self.completed_courses = updated_courses
+                if save_completed_courses(self.completed_courses):
+                    self.log_message(f"Đã cập nhật danh sách môn đã học: {len(self.completed_courses)} môn.")
+                    # Cập nhật lại danh sách môn học để cập nhật trạng thái disable
+                    self._populate_course_list()
+                else:
+                    self.log_message("Lỗi khi lưu danh sách môn đã học.")
 
     def apply_theme(self):
         """Áp dụng theme (sáng hoặc tối) cho ứng dụng"""
