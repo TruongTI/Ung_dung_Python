@@ -84,6 +84,58 @@ QDateEdit, QTimeEdit {
     padding: 3px;
 }
 
+QTimeEdit::up-button, QDateEdit::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 16px;
+    border-left: 1px solid #cccccc;
+    border-top-right-radius: 3px;
+    background-color: #f0f0f0;
+}
+
+QTimeEdit::up-button:hover, QDateEdit::up-button:hover {
+    background-color: #e0e0e0;
+}
+
+QTimeEdit::up-button:pressed, QDateEdit::up-button:pressed {
+    background-color: #d0d0d0;
+}
+
+QTimeEdit::down-button, QDateEdit::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 16px;
+    border-left: 1px solid #cccccc;
+    border-bottom-right-radius: 3px;
+    background-color: #f0f0f0;
+}
+
+QTimeEdit::down-button:hover, QDateEdit::down-button:hover {
+    background-color: #e0e0e0;
+}
+
+QTimeEdit::down-button:pressed, QDateEdit::down-button:pressed {
+    background-color: #d0d0d0;
+}
+
+QTimeEdit::up-arrow, QDateEdit::up-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #666666;
+    width: 0px;
+    height: 0px;
+}
+
+QTimeEdit::down-arrow, QDateEdit::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #666666;
+    width: 0px;
+    height: 0px;
+}
+
 QComboBox {
     background-color: #ffffff;
     border: 1px solid #cccccc;
@@ -108,6 +160,58 @@ QSpinBox {
     border: 1px solid #cccccc;
     border-radius: 3px;
     padding: 3px;
+}
+
+QSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 16px;
+    border-left: 1px solid #cccccc;
+    border-top-right-radius: 3px;
+    background-color: #f0f0f0;
+}
+
+QSpinBox::up-button:hover {
+    background-color: #e0e0e0;
+}
+
+QSpinBox::up-button:pressed {
+    background-color: #d0d0d0;
+}
+
+QSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 16px;
+    border-left: 1px solid #cccccc;
+    border-bottom-right-radius: 3px;
+    background-color: #f0f0f0;
+}
+
+QSpinBox::down-button:hover {
+    background-color: #e0e0e0;
+}
+
+QSpinBox::down-button:pressed {
+    background-color: #d0d0d0;
+}
+
+QSpinBox::up-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #666666;
+    width: 0px;
+    height: 0px;
+}
+
+QSpinBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #666666;
+    width: 0px;
+    height: 0px;
 }
 
 QStatusBar {
@@ -223,6 +327,58 @@ QDateEdit, QTimeEdit {
     color: #e0e0e0;
 }
 
+QTimeEdit::up-button, QDateEdit::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 16px;
+    border-left: 1px solid #555555;
+    border-top-right-radius: 3px;
+    background-color: #404040;
+}
+
+QTimeEdit::up-button:hover, QDateEdit::up-button:hover {
+    background-color: #505050;
+}
+
+QTimeEdit::up-button:pressed, QDateEdit::up-button:pressed {
+    background-color: #303030;
+}
+
+QTimeEdit::down-button, QDateEdit::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 16px;
+    border-left: 1px solid #555555;
+    border-bottom-right-radius: 3px;
+    background-color: #404040;
+}
+
+QTimeEdit::down-button:hover, QDateEdit::down-button:hover {
+    background-color: #505050;
+}
+
+QTimeEdit::down-button:pressed, QDateEdit::down-button:pressed {
+    background-color: #303030;
+}
+
+QTimeEdit::up-arrow, QDateEdit::up-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #e0e0e0;
+    width: 0px;
+    height: 0px;
+}
+
+QTimeEdit::down-arrow, QDateEdit::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #e0e0e0;
+    width: 0px;
+    height: 0px;
+}
+
 QComboBox {
     background-color: #1e1e1e;
     border: 1px solid #555555;
@@ -255,6 +411,58 @@ QSpinBox {
     border-radius: 3px;
     padding: 3px;
     color: #e0e0e0;
+}
+
+QSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 16px;
+    border-left: 1px solid #555555;
+    border-top-right-radius: 3px;
+    background-color: #404040;
+}
+
+QSpinBox::up-button:hover {
+    background-color: #505050;
+}
+
+QSpinBox::up-button:pressed {
+    background-color: #303030;
+}
+
+QSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 16px;
+    border-left: 1px solid #555555;
+    border-bottom-right-radius: 3px;
+    background-color: #404040;
+}
+
+QSpinBox::down-button:hover {
+    background-color: #505050;
+}
+
+QSpinBox::down-button:pressed {
+    background-color: #303030;
+}
+
+QSpinBox::up-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #e0e0e0;
+    width: 0px;
+    height: 0px;
+}
+
+QSpinBox::down-arrow {
+    image: none;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #e0e0e0;
+    width: 0px;
+    height: 0px;
 }
 
 QStatusBar {

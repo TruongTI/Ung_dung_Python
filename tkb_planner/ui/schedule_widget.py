@@ -36,18 +36,26 @@ class ScheduleWidget(QWidget):
         """Xử lý sự kiện click chuột vào ô lịch"""
         if event.button() == Qt.MouseButton.LeftButton:
             x, y = event.pos().x(), event.pos().y()
+            # Kiểm tra click vào vùng hợp lệ (không phải header hoặc cột tiết)
             if x < self.TIME_COL_WIDTH or y < self.HEADER_HEIGHT:
                 return
+            
+            # Tính toán chỉ số thứ và tiết
             thu_index = int((x - self.TIME_COL_WIDTH) / self.CELL_WIDTH)
             tiet = int((y - self.HEADER_HEIGHT) / self.CELL_HEIGHT) + 1
-            if thu_index < len(TEN_THU_TRONG_TUAN):
-                thu = list(TEN_THU_TRONG_TUAN.keys())[thu_index]
-                # Kiểm tra xem ô đã có lớp học chưa
-                for lop in self.current_schedule:
-                    for gio in lop.cac_khung_gio:
-                        if gio.thu == thu and gio.tiet_bat_dau <= tiet <= gio.tiet_ket_thuc:
-                            return 
-                self.cellClicked.emit(thu, tiet)
+            
+            # Kiểm tra bounds đầy đủ để tránh crash
+            if thu_index < 0 or thu_index >= len(TEN_THU_TRONG_TUAN):
+                return
+            if tiet < 1 or tiet > self.MAX_TIET:
+                return
+            
+            # Lấy thứ tương ứng
+            thu = list(TEN_THU_TRONG_TUAN.keys())[thu_index]
+            
+            # Cho phép click vào ô để thêm tiết học (không chặn nếu đã có lớp)
+            # Người dùng có thể thêm lớp mới hoặc lớp khác vào cùng ô
+            self.cellClicked.emit(thu, tiet)
 
     def paintEvent(self, event):
         """Vẽ lưới thời khóa biểu"""

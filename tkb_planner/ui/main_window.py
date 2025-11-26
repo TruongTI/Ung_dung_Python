@@ -380,7 +380,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Chưa có môn học", 
                               "Vui lòng thêm một môn học trước khi thêm lớp.")
             return
-        dialog = ClassDialog(self.all_courses, default_thu, default_tiet, self)
+        dialog = ClassDialog(self.all_courses, default_thu, default_tiet, fixed_mon_hoc=None, parent=self)
         if dialog.exec():
             data = dialog.get_data()
             if data:
@@ -398,8 +398,21 @@ class MainWindow(QMainWindow):
 
     def handle_cell_click(self, thu, tiet):
         """Xử lý khi click vào ô lịch"""
-        self.log_message(f"Chọn thêm lớp mới vào Thứ {thu}, Tiết {tiet}...")
-        self.handle_add_class_dialog(default_thu=thu, default_tiet=tiet)
+        try:
+            ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
+            self.log_message(f"Chọn thêm lớp mới vào {ten_thu}, Tiết {tiet}...")
+            
+            # Kiểm tra xem có môn học nào chưa
+            if not self.all_courses:
+                QMessageBox.warning(self, "Chưa có môn học", 
+                                  "Vui lòng thêm một môn học trước khi thêm lớp.")
+                return
+            
+            # Mở dialog thêm lớp với thứ và tiết đã chọn
+            self.handle_add_class_dialog(default_thu=thu, default_tiet=tiet)
+        except Exception as e:
+            self.log_message(f"Lỗi khi xử lý click vào lịch: {e}")
+            QMessageBox.warning(self, "Lỗi", f"Đã xảy ra lỗi: {e}")
 
     def handle_save_data(self):
         """Xử lý lưu dữ liệu"""
