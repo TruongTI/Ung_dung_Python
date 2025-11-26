@@ -5,7 +5,7 @@ Các dialog dùng để nhập liệu
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QDialogButtonBox,
     QComboBox, QSpinBox, QVBoxLayout, QListWidget, QPushButton,
-    QLabel, QHBoxLayout, QMessageBox
+    QLabel, QHBoxLayout, QMessageBox, QScrollArea, QWidget, QGroupBox
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -67,6 +67,9 @@ class ClassDialog(QDialog):
         self.mon_hoc_combo.addItems(sorted(all_courses.keys()))
         self.ma_lop_edit = QLineEdit()
         self.ten_gv_edit = QLineEdit()
+        # Combo box để chọn loại lớp
+        self.loai_lop_combo = QComboBox()
+        self.loai_lop_combo.addItems(["Lý thuyết", "Bài tập", "Lớp"])
         self.thu_combo = QComboBox()
         self.thu_combo.addItems(TEN_THU_TRONG_TUAN.values())
         self.tiet_bd_spin = QSpinBox()
@@ -83,6 +86,7 @@ class ClassDialog(QDialog):
         self.layout.addRow("Môn học:", self.mon_hoc_combo)
         self.layout.addRow("Mã lớp:", self.ma_lop_edit)
         self.layout.addRow("Tên GV:", self.ten_gv_edit)
+        self.layout.addRow("Loại lớp:", self.loai_lop_combo)
         self.layout.addRow("Thứ:", self.thu_combo)
         self.layout.addRow("Tiết bắt đầu:", self.tiet_bd_spin)
         self.layout.addRow("Tiết kết thúc:", self.tiet_kt_spin)
@@ -99,6 +103,7 @@ class ClassDialog(QDialog):
         ma_mon = self.mon_hoc_combo.currentText()
         ma_lop = self.ma_lop_edit.text().strip().upper()
         ten_gv = self.ten_gv_edit.text().strip()
+        loai_lop = self.loai_lop_combo.currentText()
         ten_thu = self.thu_combo.currentText()
         thu = [k for k, v in TEN_THU_TRONG_TUAN.items() if v == ten_thu][0]
         tiet_bd = self.tiet_bd_spin.value()
@@ -108,7 +113,8 @@ class ClassDialog(QDialog):
         return {
             'ma_mon': ma_mon, 
             'ma_lop': ma_lop, 
-            'ten_gv': ten_gv, 
+            'ten_gv': ten_gv,
+            'loai_lop': loai_lop,
             'thu': thu, 
             'tiet_bd': tiet_bd, 
             'tiet_kt': tiet_kt

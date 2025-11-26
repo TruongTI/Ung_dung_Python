@@ -59,7 +59,8 @@ def load_data():
                     lop_data['ten_giao_vien'], 
                     lop_data['ma_mon'], 
                     lop_data['ten_mon'], 
-                    lop_data.get('color_hex')
+                    lop_data.get('color_hex'),
+                    lop_data.get('loai_lop', 'Lớp')  # Mặc định là "Lớp" nếu không có
                 )
                 for gio_data in lop_data.get('cac_khung_gio', []):
                     lop_hoc.them_khung_gio(
@@ -76,40 +77,16 @@ def load_data():
 
 
 def create_sample_data_if_not_exists():
-    """Tạo dữ liệu mẫu nếu file dữ liệu chưa tồn tại"""
+    """Tạo file JSON trống nếu file dữ liệu chưa tồn tại"""
     if os.path.exists(DATA_FILE):
         return
     
-    all_courses = {}
-    
-    # Tạo môn Giải tích 1
-    mon_giai_tich = MonHoc("MI1111", "Giải tích 1", color_hex="#ADD8E6")
-    lop_GT_L05 = LopHoc("L05", "GV. Lê Văn C", "MI1111", "Giải tích 1")
-    lop_GT_L05.them_khung_gio(2, 3, 5)
-    lop_GT_L06 = LopHoc("L06", "GV. Phạm Dũng", "MI1111", "Giải tích 1")
-    lop_GT_L06.them_khung_gio(3, 1, 3)
-    mon_giai_tich.them_lop_hoc(lop_GT_L05)
-    mon_giai_tich.them_lop_hoc(lop_GT_L06)
-    all_courses["MI1111"] = mon_giai_tich
-    
-    # Tạo môn Tin học đại cương
-    mon_tin_hoc = MonHoc("IT1110", "Tin học đại cương", tien_quyet=["MI1111"], color_hex="#90EE90")
-    lop_L01 = LopHoc("L01", "GV. Nguyễn Văn A", "IT1110", "Tin học đại cương")
-    lop_L01.them_khung_gio(2, 1, 3)
-    lop_L01.them_khung_gio(4, 1, 2)
-    lop_L02 = LopHoc("L02", "GV. Trần Thị B", "IT1110", "Tin học đại cương")
-    lop_L02.them_khung_gio(3, 7, 9)
-    lop_L02.them_khung_gio(5, 7, 8)
-    mon_tin_hoc.them_lop_hoc(lop_L01)
-    mon_tin_hoc.them_lop_hoc(lop_L02)
-    all_courses["IT1110"] = mon_tin_hoc
-    
-    save_data(all_courses)
-    QMessageBox.information(
-        None, 
-        "Tạo dữ liệu", 
-        f"Chưa có file dữ liệu. Đã tạo file mẫu tại {DATA_FILE}"
-    )
+    # Tạo file JSON trống với cấu trúc rỗng
+    try:
+        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+            json.dump({}, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        QMessageBox.critical(None, "Lỗi Tạo File", f"Không thể tạo file dữ liệu: {e}")
 
 
 def save_completed_courses(completed_courses_list):

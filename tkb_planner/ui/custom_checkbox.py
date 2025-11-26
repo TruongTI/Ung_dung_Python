@@ -3,12 +3,15 @@ Custom Checkbox với nền xanh lá cây và checkmark màu trắng
 """
 
 from PyQt6.QtWidgets import QCheckBox, QStyleOptionButton
-from PyQt6.QtCore import Qt, QRect, QSize
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush
+from PyQt6.QtCore import Qt, QRect, QSize, pyqtSignal
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QMouseEvent
 
 
 class CustomCheckBox(QCheckBox):
     """Checkbox tùy chỉnh với nền xanh lá cây và checkmark màu trắng"""
+    
+    # Signal khi click vào text (không toggle checkbox)
+    textClicked = pyqtSignal()
     
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
@@ -17,6 +20,7 @@ class CustomCheckBox(QCheckBox):
         # Bật mouse tracking để phát hiện hover
         self.setMouseTracking(True)
         self._is_hovered = False
+        self._allow_text_click = False  # Flag để cho phép click vào text
     
     def enterEvent(self, event):
         """Khi chuột vào checkbox"""
@@ -29,6 +33,33 @@ class CustomCheckBox(QCheckBox):
         self._is_hovered = False
         self.update()
         super().leaveEvent(event)
+    
+    def mousePressEvent(self, event: QMouseEvent):
+        """Xử lý sự kiện click chuột"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Kích thước indicator
+            indicator_size = 20
+            indicator_x = 1
+            indicator_y = max(0, (self.height() - indicator_size) // 2)
+            indicator_rect = QRect(indicator_x, indicator_y, indicator_size, indicator_size)
+            
+            # Kiểm tra xem click vào indicator hay text
+            if indicator_rect.contains(event.pos()):
+                # Click vào indicator - toggle checkbox bình thường
+                super().mousePressEvent(event)
+            else:
+                # Click vào text - chỉ phát signal, không toggle checkbox
+                if self._allow_text_click:
+                    self.textClicked.emit()
+                else:
+                    # Nếu không cho phép click vào text, vẫn toggle checkbox
+                    super().mousePressEvent(event)
+        else:
+            super().mousePressEvent(event)
+    
+    def set_allow_text_click(self, allow: bool):
+        """Cho phép click vào text mà không toggle checkbox"""
+        self._allow_text_click = allow
     
     def paintEvent(self, event):
         """Vẽ checkbox tùy chỉnh với nền xanh lá cây và checkmark màu trắng"""

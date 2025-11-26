@@ -21,6 +21,7 @@ from ..data_handler import (
 from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN
 from .schedule_widget import ScheduleWidget
 from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCompletedCoursesDialog
+from .course_classes_dialog import CourseClassesDialog
 from .theme import LIGHT_THEME, DARK_THEME
 from .custom_checkbox import CustomCheckBox
 
@@ -75,6 +76,10 @@ class MainWindow(QMainWindow):
         self.search_input.setPlaceholderText("Nhập mã hoặc tên môn để lọc...")
         search_layout.addWidget(QLabel("Nhập môn:"))
         search_layout.addWidget(self.search_input)
+        # Nút Thêm Môn bên cạnh ô nhập
+        self.add_subject_btn = QPushButton("Thêm Môn")
+        self.add_subject_btn.setMinimumHeight(30)
+        search_layout.addWidget(self.add_subject_btn)
         course_layout.addLayout(search_layout)
         
         scroll_area_courses = QScrollArea()
@@ -181,7 +186,6 @@ class MainWindow(QMainWindow):
         self.tkb_info_label.setStyleSheet("font-weight: bold; padding: 5px;")
         
         self.next_tkb_btn = QPushButton("TKB Tiếp >")
-        self.add_subject_btn = QPushButton("Thêm Môn")
         self.save_tkb_btn = QPushButton("Lưu TKB")
         self.clear_tkb_btn = QPushButton("Xoá TKB")
 
@@ -189,7 +193,6 @@ class MainWindow(QMainWindow):
         self.find_tkb_btn.setMinimumHeight(button_height)
         self.prev_tkb_btn.setMinimumHeight(button_height)
         self.next_tkb_btn.setMinimumHeight(button_height)
-        self.add_subject_btn.setMinimumHeight(button_height)
         self.save_tkb_btn.setMinimumHeight(button_height)
         self.clear_tkb_btn.setMinimumHeight(button_height)
 
@@ -198,7 +201,6 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.tkb_info_label)  # Label ở giữa 2 nút
         button_layout.addWidget(self.next_tkb_btn)
         button_layout.addStretch()
-        button_layout.addWidget(self.add_subject_btn)
         button_layout.addWidget(self.save_tkb_btn)
         button_layout.addWidget(self.clear_tkb_btn)
         right_panel_layout.addLayout(button_layout)
@@ -237,6 +239,11 @@ class MainWindow(QMainWindow):
         deselect_all_action = QAction("Bỏ chọn tất cả", self)
         deselect_all_action.triggered.connect(lambda: self.handle_select_all(False))
         view_menu.addAction(deselect_all_action)
+        view_menu.addSeparator()
+        # Menu xóa toàn bộ dữ liệu
+        clear_all_action = QAction("Xóa toàn bộ dữ liệu", self)
+        clear_all_action.triggered.connect(self.handle_clear_all_data)
+        view_menu.addAction(clear_all_action)
         view_menu.addSeparator()
         # Menu chuyển đổi theme
         self.toggle_theme_action = QAction("Chế độ tối", self)
@@ -281,6 +288,10 @@ class MainWindow(QMainWindow):
             
             check = CustomCheckBox(f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
             check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            # Cho phép click vào text mà không toggle checkbox
+            check.set_allow_text_click(True)
+            # Kết nối sự kiện click vào text để hiển thị các lớp của môn học
+            check.textClicked.connect(lambda m=mon_hoc: self.handle_show_course_classes(m))
             # Disable checkbox cho các môn đã có trong danh sách môn đã học
             if mon_hoc.ma_mon in self.completed_courses:
                 check.setEnabled(False)
@@ -375,7 +386,8 @@ class MainWindow(QMainWindow):
             if data:
                 mon_hoc = self.all_courses[data['ma_mon']]
                 new_lop = LopHoc(data['ma_lop'], data['ten_gv'], 
-                               mon_hoc.ma_mon, mon_hoc.ten_mon)
+                               mon_hoc.ma_mon, mon_hoc.ten_mon,
+                               loai_lop=data.get('loai_lop', 'Lớp'))
                 new_lop.them_khung_gio(data['thu'], data['tiet_bd'], data['tiet_kt'])
                 mon_hoc.them_lop_hoc(new_lop)
                 save_data(self.all_courses)
@@ -400,6 +412,50 @@ class MainWindow(QMainWindow):
         """Chọn/bỏ chọn tất cả môn học"""
         for widgets in self.course_widgets.values():
             widgets['check'].setChecked(state)
+
+    def handle_clear_all_data(self):
+        """Xóa toàn bộ môn học và lớp học"""
+        if not self.all_courses:
+            QMessageBox.information(self, "Thông báo", "Không có dữ liệu để xóa.")
+            return
+        
+        # Xác nhận xóa
+        reply = QMessageBox.question(
+            self, 
+            'Xác nhận xóa', 
+            'Bạn có chắc muốn xóa TOÀN BỘ môn học và lớp học?\n\nHành động này không thể hoàn tác!',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Xóa tất cả môn học
+            self.all_courses.clear()
+            
+            # Xóa danh sách môn đã học
+            self.completed_courses.clear()
+            save_completed_courses(self.completed_courses)
+            
+            # Xóa kết quả tìm kiếm TKB
+            self.danh_sach_tkb_tim_duoc = []
+            self.current_tkb_index = -1
+            self.schedule_view.display_schedule([], self.all_courses)
+            self.update_tkb_info_label()
+            
+            # Xóa danh sách giờ bận
+            self.danh_sach_gio_ban = []
+            for widget in self.busy_time_widgets.values():
+                widget.deleteLater()
+            self.busy_time_widgets.clear()
+            
+            # Cập nhật UI
+            self._populate_course_list()
+            
+            # Lưu file (file sẽ trống)
+            save_data(self.all_courses)
+            
+            self.log_message("Đã xóa toàn bộ dữ liệu môn học và lớp học.")
+            QMessageBox.information(self, "Thành công", "Đã xóa toàn bộ dữ liệu.")
 
     def handle_about(self):
         """Hiển thị thông tin về ứng dụng"""
@@ -608,6 +664,22 @@ class MainWindow(QMainWindow):
             current = self.current_tkb_index + 1
             total = len(self.danh_sach_tkb_tim_duoc)
             self.tkb_info_label.setText(f"Thời khóa biểu: {current}/{total}")
+
+    def handle_show_course_classes(self, mon_hoc):
+        """Hiển thị dialog các lớp học của môn học"""
+        dialog = CourseClassesDialog(mon_hoc, self)
+        if dialog.exec():
+            # Xử lý các lớp đã xóa
+            deleted_classes = dialog.get_deleted_classes()
+            for lop in deleted_classes:
+                mon_hoc.cac_lop_hoc = [l for l in mon_hoc.cac_lop_hoc if l.get_id() != lop.get_id()]
+                mon_hoc.cac_lop_hoc_dict.pop(lop.get_id(), None)
+                self.log_message(f"Đã xóa lớp {lop.ma_lop} khỏi môn {mon_hoc.ma_mon}")
+            
+            # Lưu dữ liệu
+            if deleted_classes:
+                save_data(self.all_courses)
+                self.log_message(f"Đã cập nhật danh sách lớp học của môn {mon_hoc.ma_mon}")
 
     def handle_input_completed_courses(self):
         """Xử lý nhập môn đã học"""
