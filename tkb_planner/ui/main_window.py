@@ -81,24 +81,59 @@ class MainWindow(QMainWindow):
         # Nhóm giờ bận
         busy_group = QGroupBox("Giờ bận")
         busy_layout = QVBoxLayout(busy_group)
+        busy_layout.setSpacing(8)  # Thêm khoảng cách giữa các hàng
+        
+        # Hàng 1: Ngày và Lý do
         busy_input_layout1 = QHBoxLayout()
+        busy_input_layout1.setSpacing(8)
+        date_label = QLabel("Ngày:")
+        date_label.setMinimumWidth(40)
         self.busy_date_edit = QDateEdit(QDate.currentDate())
         self.busy_date_edit.setCalendarPopup(True)
-        self.busy_reason_input = QLineEdit()
-        busy_input_layout1.addWidget(QLabel("Ngày:"))
-        busy_input_layout1.addWidget(self.busy_date_edit)
-        busy_input_layout1.addWidget(QLabel("Lí do:"))
-        busy_input_layout1.addWidget(self.busy_reason_input)
+        self.busy_date_edit.setDisplayFormat("dd/MM/yyyy")  # Format hiển thị đầy đủ ngày
+        self.busy_date_edit.setMinimumWidth(120)  # Tăng chiều rộng tối thiểu
+        self.busy_date_edit.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         
+        reason_label = QLabel("Lý do:")
+        reason_label.setMinimumWidth(40)
+        self.busy_reason_input = QLineEdit()
+        self.busy_reason_input.setPlaceholderText("Nhập lý do bận...")
+        self.busy_reason_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        
+        busy_input_layout1.addWidget(date_label, 0)
+        busy_input_layout1.addWidget(self.busy_date_edit, 0)
+        busy_input_layout1.addWidget(reason_label, 0)
+        busy_input_layout1.addWidget(self.busy_reason_input, 1)  # Ô lý do chiếm không gian còn lại
+        
+        # Hàng 2: Giờ bắt đầu, giờ kết thúc và nút Thêm
         busy_input_layout2 = QHBoxLayout()
+        busy_input_layout2.setSpacing(8)
+        
+        start_label = QLabel("Bắt đầu:")
+        start_label.setMinimumWidth(60)
         self.busy_start_time = QTimeEdit(QTime(7, 0))
+        self.busy_start_time.setDisplayFormat("HH:mm")  # Format 24 giờ
+        self.busy_start_time.setMinimumWidth(80)
+        self.busy_start_time.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        
+        end_label = QLabel("Kết thúc:")
+        end_label.setMinimumWidth(60)
         self.busy_end_time = QTimeEdit(QTime(8, 0))
+        self.busy_end_time.setDisplayFormat("HH:mm")  # Format 24 giờ
+        self.busy_end_time.setMinimumWidth(80)
+        self.busy_end_time.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        
         self.add_busy_btn = QPushButton("Thêm")
-        busy_input_layout2.addWidget(QLabel("Bắt đầu:"))
-        busy_input_layout2.addWidget(self.busy_start_time)
-        busy_input_layout2.addWidget(QLabel("Kết thúc:"))
-        busy_input_layout2.addWidget(self.busy_end_time)
-        busy_input_layout2.addWidget(self.add_busy_btn)
+        self.add_busy_btn.setMinimumWidth(70)
+        self.add_busy_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        
+        busy_input_layout2.addWidget(start_label, 0)
+        busy_input_layout2.addWidget(self.busy_start_time, 0)
+        busy_input_layout2.addWidget(end_label, 0)
+        busy_input_layout2.addWidget(self.busy_end_time, 0)
+        busy_input_layout2.addStretch()  # Thêm khoảng trống để đẩy nút sang phải
+        busy_input_layout2.addWidget(self.add_busy_btn, 0)
+        
         busy_layout.addLayout(busy_input_layout1)
         busy_layout.addLayout(busy_input_layout2)
         
