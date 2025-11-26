@@ -115,6 +115,12 @@ python3 main.py
 
 **Lưu ý:** Nếu bạn không sử dụng virtual environment, có thể chạy trực tiếp `python main.py` hoặc `python3 main.py`, nhưng cần đảm bảo PyQt6 đã được cài đặt trong môi trường Python của bạn.
 
+```bash
+#Cài đặt watchdog để có thể xem dự án động luôn
+pip install watchdog
+watchmedo auto-restart --patterns="*.py" --recursive -- python main.py
+```
+
 ## Hướng dẫn sử dụng
 
 ### 1. Thêm môn học

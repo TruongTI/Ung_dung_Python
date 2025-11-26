@@ -88,7 +88,7 @@ class ClassDialog(QDialog):
             self.tiet_kt_spin.setValue(default_tiet)
         
         self.layout.addRow("Môn học:", self.mon_hoc_combo)
-        self.layout.addRow("Mã lớp:", self.ma_lop_edit)
+        self.layout.addRow("Phòng học:", self.ma_lop_edit)
         self.layout.addRow("Tên GV:", self.ten_gv_edit)
         self.layout.addRow("Loại lớp:", self.loai_lop_combo)
         self.layout.addRow("Thứ:", self.thu_combo)

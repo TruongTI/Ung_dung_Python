@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 
 from ..constants import TEN_THU_TRONG_TUAN
 from ..models import LopHoc
+from ..data_handler import save_data
 from .dialogs import ClassDialog
 
 
@@ -19,7 +20,7 @@ class CourseClassesDialog(QDialog):
     def __init__(self, mon_hoc, all_courses=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Các lớp học - {mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
-        self.setMinimumSize(700, 500)
+        self.setMinimumSize(600,200)
         self.mon_hoc = mon_hoc
         self.all_courses = all_courses or {mon_hoc.ma_mon: mon_hoc}
         self.deleted_classes = []  # Lưu các lớp đã xóa
@@ -37,6 +38,7 @@ class CourseClassesDialog(QDialog):
         self.scroll.setWidgetResizable(True)
         self.scroll_widget = QWidget()
         self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setSpacing(10)
         
         self._populate_classes()
         
@@ -56,31 +58,35 @@ class CourseClassesDialog(QDialog):
         """Tạo widget hiển thị thông tin một khung giờ của lớp học"""
         widget = QWidget()
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(5, 3, 5, 3)
+        layout.setContentsMargins(10, 0, 0, 0)
         
         # Label mã lớp (chỉ hiển thị ở dòng đầu tiên)
         if is_first_row:
             ma_lop_label = QLabel(lop.ma_lop)
         else:
             ma_lop_label = QLabel("")
-        layout.addWidget(ma_lop_label, 1)
+        ma_lop_label.setStyleSheet("padding-left: 0px;")
+        layout.addWidget(ma_lop_label)
         
         # Label giờ học (hiển thị dạng "Tiết X-Y")
         gio_label = QLabel(f"Tiết {gio.tiet_bat_dau}-{gio.tiet_ket_thuc}")
-        layout.addWidget(gio_label, 1)
+        gio_label.setStyleSheet("padding-left: 0px;")
+        layout.addWidget(gio_label)
         
         # Label thứ
         ten_thu = TEN_THU_TRONG_TUAN.get(gio.thu, f"Thứ {gio.thu}")
         thu_label = QLabel(ten_thu)
-        layout.addWidget(thu_label, 1)
-        
-        # Label tiết bắt đầu
-        tiet_bd_label = QLabel(str(gio.tiet_bat_dau))
-        layout.addWidget(tiet_bd_label, 1)
-        
-        # Label tiết kết thúc
-        tiet_kt_label = QLabel(str(gio.tiet_ket_thuc))
-        layout.addWidget(tiet_kt_label, 1)
+        thu_label.setStyleSheet("padding-left: 10px;")
+        layout.addWidget(thu_label)
+    
+
+        # Label tên giáo viên (chỉ hiển thị ở dòng đầu tiên)
+        if is_first_row:
+            gv_label = QLabel(lop.ten_giao_vien)
+        else:
+            gv_label = QLabel("")
+        gv_label.setStyleSheet("padding-left: 0px;")
+        layout.addWidget(gv_label)
         
         # Nút sửa (chỉ hiển thị ở dòng đầu tiên)
         if is_first_row:
@@ -103,14 +109,60 @@ class CourseClassesDialog(QDialog):
         return widget
     
     def handle_edit_class(self, lop):
-        """Xử lý sửa lớp học"""
-        # Lưu lớp vào danh sách đã chỉnh sửa để xử lý sau
-        self.edited_classes[lop.get_id()] = lop
-        # Đóng dialog và trả về kết quả
-        self.accept()
+        """Xử lý sửa lớp học trực tiếp trong dialog (không đóng dialog)."""
+        # Lấy khung giờ đầu tiên để điền sẵn vào dialog (nếu có)
+        default_thu = None
+        default_tiet = None
+        if lop.cac_khung_gio:
+            gio_dau = lop.cac_khung_gio[0]
+            default_thu = gio_dau.thu
+            default_tiet = gio_dau.tiet_bat_dau
+
+        dialog = ClassDialog(
+            self.all_courses,
+            default_thu=default_thu,
+            default_tiet=default_tiet,
+            fixed_mon_hoc=self.mon_hoc,
+            parent=self,
+        )
+
+        # Điền sẵn thông tin lớp hiện tại
+        dialog.ma_lop_edit.setText(lop.ma_lop)
+        dialog.ten_gv_edit.setText(lop.ten_giao_vien)
+        dialog.loai_lop_combo.setCurrentText(getattr(lop, "loai_lop", "Lớp"))
+
+        if dialog.exec():
+            data = dialog.get_data()
+            if not data:
+                QMessageBox.warning(
+                    self,
+                    "Lỗi",
+                    "Vui lòng điền đủ thông tin và đảm bảo tiết bắt đầu <= tiết kết thúc.",
+                )
+                return
+
+            # Cập nhật thông tin lớp hiện tại thay vì tạo lớp mới
+            old_id = lop.get_id()
+            lop.ma_lop = data["ma_lop"]
+            lop.ten_giao_vien = data["ten_gv"]
+            lop.loai_lop = data.get("loai_lop", lop.loai_lop)
+            # Cập nhật lại khung giờ (tạm thời chỉ 1 khung giờ)
+            lop.cac_khung_gio.clear()
+            lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
+
+            # Nếu mã lớp thay đổi, cần cập nhật lại dict của môn học
+            if old_id != lop.get_id():
+                if old_id in self.mon_hoc.cac_lop_hoc_dict:
+                    del self.mon_hoc.cac_lop_hoc_dict[old_id]
+                self.mon_hoc.cac_lop_hoc_dict[lop.get_id()] = lop
+
+            # Lưu và refresh lại giao diện
+            save_data(self.all_courses)
+            self.edited_classes[lop.get_id()] = lop
+            self._populate_classes()
     
     def handle_delete_class(self, lop):
-        """Xử lý xóa lớp học"""
+        """Xử lý xóa lớp học trực tiếp trong dialog (không đóng dialog)."""
         reply = QMessageBox.question(
             self, 'Xác nhận xóa', 
             f"Bạn có chắc muốn xóa lớp '{lop.ma_lop}'?",
@@ -118,10 +170,20 @@ class CourseClassesDialog(QDialog):
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            # Xóa khỏi danh sách lớp của môn học
+            if lop in self.mon_hoc.cac_lop_hoc:
+                self.mon_hoc.cac_lop_hoc.remove(lop)
+            # Xóa khỏi dict nếu có
+            lop_id = lop.get_id()
+            if lop_id in self.mon_hoc.cac_lop_hoc_dict:
+                del self.mon_hoc.cac_lop_hoc_dict[lop_id]
+
             if lop not in self.deleted_classes:
                 self.deleted_classes.append(lop)
-            # Đóng dialog để áp dụng thay đổi
-            self.accept()
+
+            # Lưu và refresh lại danh sách lớp, không đóng dialog
+            save_data(self.all_courses)
+            self._populate_classes()
     
     def get_deleted_classes(self):
         """Lấy danh sách các lớp đã xóa"""
@@ -161,11 +223,24 @@ class CourseClassesDialog(QDialog):
                 
                 # Header
                 header_layout = QHBoxLayout()
-                header_layout.addWidget(QLabel("Mã lớp"))
-                header_layout.addWidget(QLabel("Giờ học"))
-                header_layout.addWidget(QLabel("Thứ"))
-                header_layout.addWidget(QLabel("Tiết bắt đầu"))
-                header_layout.addWidget(QLabel("Tiết kết thúc"))
+                header_layout.setSpacing(20)
+                header_layout.setContentsMargins(8, 0, 0, 0)
+                header_layout.addWidget(QLabel("Phòng học"))
+                
+                # header_layout.addWidget(QLabel("Giờ học"))
+                gio_label = QLabel("Giờ học")
+                gio_label.setStyleSheet("padding-left: 0px;")
+                header_layout.addWidget(gio_label)
+                # header_layout.addWidget(QLabel("Thứ"))
+                thu_label = QLabel("Thứ")
+                thu_label.setStyleSheet("padding-left: 5px;")
+                header_layout.addWidget(thu_label)
+
+                # header_layout.addWidget(QLabel("GV"))
+                GV_label = QLabel("GV")
+                GV_label.setStyleSheet("padding-left: 17px;")
+                header_layout.addWidget(GV_label)
+                
                 header_layout.addWidget(QLabel(""))  # Cho nút
                 header_layout.addWidget(QLabel(""))  # Cho nút
                 group_layout.addLayout(header_layout)
@@ -185,7 +260,6 @@ class CourseClassesDialog(QDialog):
         if dialog.exec():
             data = dialog.get_data()
             if data:
-                from ..data_handler import save_data
                 new_lop = LopHoc(
                     data['ma_lop'], 
                     data['ten_gv'], 
