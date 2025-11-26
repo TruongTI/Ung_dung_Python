@@ -19,6 +19,7 @@ from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN
 from .schedule_widget import ScheduleWidget
 from .dialogs import SubjectDialog, ClassDialog
 from .theme import LIGHT_THEME, DARK_THEME
+from .custom_checkbox import CustomCheckBox
 
 
 class MainWindow(QMainWindow):
@@ -27,7 +28,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Công cụ Sắp xếp TKB Pro")
-        self.setGeometry(100, 100, 1288, 780)
+        self.setGeometry(100, 100, 1288, 900)  # Tăng chiều cao từ 780 lên 900
         self.setFont(QFont("Segoe UI", 10))
         
         # Load settings
@@ -57,6 +58,7 @@ class MainWindow(QMainWindow):
         
         # Panel bên trái
         left_panel = QGroupBox("Bảng điều khiển")
+        left_panel.setMinimumHeight(700)  # Đặt chiều cao tối thiểu cho panel bên trái
         left_panel_layout = QVBoxLayout(left_panel)
         main_layout.addWidget(left_panel, 1)
         
@@ -151,9 +153,9 @@ class MainWindow(QMainWindow):
         self.notification_browser = QTextBrowser()
         notification_layout.addWidget(self.notification_browser)
         
-        left_panel_layout.addWidget(course_group, 3)
-        left_panel_layout.addWidget(busy_group, 2)
-        left_panel_layout.addWidget(notification_group, 1)
+        left_panel_layout.addWidget(course_group, 4)  # Tăng từ 3 lên 4
+        left_panel_layout.addWidget(busy_group, 3)    # Tăng từ 2 lên 3
+        left_panel_layout.addWidget(notification_group, 1)  # Giữ nguyên
         
         # Panel bên phải
         right_panel = QGroupBox("Lịch Tuần")
@@ -257,9 +259,9 @@ class MainWindow(QMainWindow):
             layout.setContentsMargins(5, 3, 5, 3)  # Thêm margin để tránh bị che
             layout.setSpacing(5)  # Thêm khoảng cách giữa các widget
             
-            check = QCheckBox(f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
+            check = CustomCheckBox(f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
             check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            mandatory_check = QCheckBox("Bắt buộc")
+            mandatory_check = CustomCheckBox("Bắt buộc")
             mandatory_check.setToolTip("TKB tìm được phải chứa môn này")
             mandatory_check.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
             
@@ -425,7 +427,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(5, 3, 5, 3)  # Thêm margin để tránh bị che
         layout.setSpacing(5)  # Thêm khoảng cách giữa các widget
         
-        check = QCheckBox(str(new_busy_time))
+        check = CustomCheckBox(str(new_busy_time))
         check.setChecked(True)
         check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         
