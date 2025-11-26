@@ -179,6 +179,18 @@ class CompletedCoursesDialog(QDialog):
                 font = item.font()
                 font.setStrikeOut(True)
                 item.setFont(font)
+            else:
+                # Đảm bảo các môn không còn trong danh sách môn đã học được hiển thị bình thường
+                item.setSelected(False)
+                # Enable item để có thể chọn
+                flags = item.flags()
+                flags |= Qt.ItemFlag.ItemIsEnabled
+                item.setFlags(flags)
+                # Bỏ gạch ngang nếu có
+                font = item.font()
+                font.setStrikeOut(False)
+                item.setFont(font)
+                item.setToolTip("")
     
     def handle_add_course(self):
         """Xử lý thêm môn mới"""
@@ -271,8 +283,11 @@ class ViewCompletedCoursesDialog(QDialog):
         button_layout.addStretch()
         layout.addLayout(button_layout)
         
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        # Buttons - Thêm cả OK và Close để có thể xác nhận thay đổi
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Close
+        )
+        buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
     

@@ -620,6 +620,8 @@ class MainWindow(QMainWindow):
             self.completed_courses = selected_courses
             if save_completed_courses(self.completed_courses):
                 self.log_message(f"Đã lưu {len(self.completed_courses)} môn đã học.")
+                # Cập nhật lại danh sách môn học để cập nhật trạng thái disable/enable
+                self._populate_course_list()
                 QMessageBox.information(self, "Thành công", 
                                       f"Đã lưu {len(self.completed_courses)} môn đã học.")
             else:
@@ -628,17 +630,18 @@ class MainWindow(QMainWindow):
     def handle_view_completed_courses(self):
         """Hiển thị danh sách môn đã học"""
         dialog = ViewCompletedCoursesDialog(self.all_courses, self.completed_courses, self)
-        if dialog.exec():
-            # Cập nhật danh sách môn đã học sau khi chỉnh sửa
-            updated_courses = dialog.get_updated_completed_courses()
-            if updated_courses != self.completed_courses:
-                self.completed_courses = updated_courses
-                if save_completed_courses(self.completed_courses):
-                    self.log_message(f"Đã cập nhật danh sách môn đã học: {len(self.completed_courses)} môn.")
-                    # Cập nhật lại danh sách môn học để cập nhật trạng thái disable
-                    self._populate_course_list()
-                else:
-                    self.log_message("Lỗi khi lưu danh sách môn đã học.")
+        # Luôn cập nhật danh sách sau khi đóng dialog (dù có thay đổi hay không)
+        dialog.exec()
+        # Lấy danh sách đã cập nhật (có thể đã thay đổi trong dialog)
+        updated_courses = dialog.get_updated_completed_courses()
+        if updated_courses != self.completed_courses:
+            self.completed_courses = updated_courses
+            if save_completed_courses(self.completed_courses):
+                self.log_message(f"Đã cập nhật danh sách môn đã học: {len(self.completed_courses)} môn.")
+                # Cập nhật lại danh sách môn học để cập nhật trạng thái disable/enable
+                self._populate_course_list()
+            else:
+                self.log_message("Lỗi khi lưu danh sách môn đã học.")
 
     def apply_theme(self):
         """Áp dụng theme (sáng hoặc tối) cho ứng dụng"""
