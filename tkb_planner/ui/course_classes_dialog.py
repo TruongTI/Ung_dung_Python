@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt
 from ..constants import TEN_THU_TRONG_TUAN
 from ..models import LopHoc
 from ..data_handler import save_data
+from ..scheduler import kiem_tra_trung_phong_hoc, kiem_tra_trung_giao_vien
 from .dialogs import ClassDialog
 
 
@@ -141,8 +142,30 @@ class CourseClassesDialog(QDialog):
                 )
                 return
 
-            # Cập nhật thông tin lớp hiện tại thay vì tạo lớp mới
+            # Tạo lớp tạm để kiểm tra trùng phòng học
             old_id = lop.get_id()
+            temp_lop = LopHoc(
+                data["ma_lop"],
+                data["ten_gv"],
+                self.mon_hoc.ma_mon,
+                self.mon_hoc.ten_mon,
+                loai_lop=data.get("loai_lop", lop.loai_lop)
+            )
+            temp_lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
+            
+            # Kiểm tra trùng phòng học và trùng giờ (loại trừ lớp hiện tại)
+            is_valid, error_msg = kiem_tra_trung_phong_hoc(temp_lop, self.all_courses, exclude_lop_id=old_id)
+            if not is_valid:
+                QMessageBox.warning(self, "Lỗi trùng phòng học", error_msg)
+                return
+            
+            # Kiểm tra trùng giáo viên và trùng giờ (loại trừ lớp hiện tại)
+            is_valid, error_msg = kiem_tra_trung_giao_vien(temp_lop, self.all_courses, exclude_lop_id=old_id)
+            if not is_valid:
+                QMessageBox.warning(self, "Lỗi trùng giáo viên", error_msg)
+                return
+            
+            # Cập nhật thông tin lớp hiện tại thay vì tạo lớp mới
             lop.ma_lop = data["ma_lop"]
             lop.ten_giao_vien = data["ten_gv"]
             lop.loai_lop = data.get("loai_lop", lop.loai_lop)
@@ -268,7 +291,25 @@ class CourseClassesDialog(QDialog):
                     loai_lop=data.get('loai_lop', 'Lớp')
                 )
                 new_lop.them_khung_gio(data['thu'], data['tiet_bd'], data['tiet_kt'])
-                self.mon_hoc.them_lop_hoc(new_lop)
+                
+                # Kiểm tra trùng phòng học và trùng giờ
+                is_valid, error_msg = kiem_tra_trung_phong_hoc(new_lop, self.all_courses)
+                if not is_valid:
+                    QMessageBox.warning(self, "Lỗi trùng phòng học", error_msg)
+                    return
+                
+                # Kiểm tra trùng giáo viên và trùng giờ
+                is_valid, error_msg = kiem_tra_trung_giao_vien(new_lop, self.all_courses)
+                if not is_valid:
+                    QMessageBox.warning(self, "Lỗi trùng giáo viên", error_msg)
+                    return
+                
+                # Thêm lớp học (hàm này sẽ kiểm tra trùng giờ trong cùng môn và cùng phòng)
+                if not self.mon_hoc.them_lop_hoc(new_lop):
+                    QMessageBox.warning(self, "Lỗi", 
+                                      f"Lớp học '{data['ma_lop']}' đã tồn tại với cùng giờ học trong môn này.")
+                    return
+                
                 save_data(self.all_courses)
                 # Refresh lại danh sách
                 self._populate_classes()

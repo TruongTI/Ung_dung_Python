@@ -189,11 +189,36 @@ class MonHoc:
     
     def them_lop_hoc(self, lop_hoc):
         """Thêm một lớp học vào môn học"""
-        if lop_hoc.get_id() not in self.cac_lop_hoc_dict:
-            if self.color_hex and not lop_hoc.color_hex:
-                lop_hoc.color_hex = self.color_hex
-            self.cac_lop_hoc.append(lop_hoc)
-            self.cac_lop_hoc_dict[lop_hoc.get_id()] = lop_hoc
+        # Kiểm tra xem có lớp nào cùng môn, cùng phòng và trùng giờ không
+        from .scheduler import check_trung_lich
+        
+        lop_id = lop_hoc.get_id()
+        # Kiểm tra tất cả các lớp có cùng ID (cùng môn, cùng phòng)
+        if lop_id in self.cac_lop_hoc_dict:
+            lop_cu = self.cac_lop_hoc_dict[lop_id]
+            # Nếu trùng giờ, không cho thêm (giữ nguyên lớp cũ)
+            if check_trung_lich(lop_hoc, lop_cu):
+                return False
+        
+        # Kiểm tra tất cả các lớp trong danh sách (có thể có nhiều lớp cùng ID nhưng khác giờ)
+        for lop_da_co in self.cac_lop_hoc:
+            if lop_da_co.get_id() == lop_id:
+                # Nếu trùng giờ, không cho thêm
+                if check_trung_lich(lop_hoc, lop_da_co):
+                    return False
+        
+        # Nếu chưa có lớp với cùng ID, hoặc có nhưng không trùng giờ, thêm lớp mới
+        if self.color_hex and not lop_hoc.color_hex:
+            lop_hoc.color_hex = self.color_hex
+        
+        # Thêm vào danh sách
+        self.cac_lop_hoc.append(lop_hoc)
+        
+        # Cập nhật dict (nếu chưa có, hoặc nếu lớp mới có giờ học khác)
+        if lop_id not in self.cac_lop_hoc_dict:
+            self.cac_lop_hoc_dict[lop_id] = lop_hoc
+        
+        return True
     
     def to_dict(self):
         return {

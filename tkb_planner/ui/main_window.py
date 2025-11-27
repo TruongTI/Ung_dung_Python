@@ -13,7 +13,7 @@ from PyQt6.QtCore import Qt, QTime, QSettings
 from PyQt6.QtGui import QFont, QAction
 
 from ..models import MonHoc, LopHoc, LichBan
-from ..scheduler import tim_thoi_khoa_bieu
+from ..scheduler import tim_thoi_khoa_bieu, kiem_tra_trung_phong_hoc, kiem_tra_trung_giao_vien
 from ..data_handler import (
     save_data, load_data, create_sample_data_if_not_exists,
     save_completed_courses, load_completed_courses,
@@ -393,7 +393,25 @@ class MainWindow(QMainWindow):
                                mon_hoc.ma_mon, mon_hoc.ten_mon,
                                loai_lop=data.get('loai_lop', 'Lớp'))
                 new_lop.them_khung_gio(data['thu'], data['tiet_bd'], data['tiet_kt'])
-                mon_hoc.them_lop_hoc(new_lop)
+                
+                # Kiểm tra trùng phòng học và trùng giờ
+                is_valid, error_msg = kiem_tra_trung_phong_hoc(new_lop, self.all_courses)
+                if not is_valid:
+                    QMessageBox.warning(self, "Lỗi trùng phòng học", error_msg)
+                    return
+                
+                # Kiểm tra trùng giáo viên và trùng giờ
+                is_valid, error_msg = kiem_tra_trung_giao_vien(new_lop, self.all_courses)
+                if not is_valid:
+                    QMessageBox.warning(self, "Lỗi trùng giáo viên", error_msg)
+                    return
+                
+                # Thêm lớp học (hàm này sẽ kiểm tra trùng giờ trong cùng môn và cùng phòng)
+                if not mon_hoc.them_lop_hoc(new_lop):
+                    QMessageBox.warning(self, "Lỗi", 
+                                      f"Lớp học '{data['ma_lop']}' đã tồn tại với cùng giờ học trong môn này.")
+                    return
+                
                 save_data(self.all_courses)
                 self.log_message(f"Đã thêm lớp {data['ma_lop']} cho môn {data['ma_mon']}")
             else:
@@ -619,7 +637,7 @@ class MainWindow(QMainWindow):
         self.log_message("Đang tìm kiếm TKB...")
         QApplication.processEvents()
         self.danh_sach_tkb_tim_duoc, error_msg = tim_thoi_khoa_bieu(
-            selected_courses, active_busy_times, mandatory_courses
+            selected_courses, active_busy_times, mandatory_courses, self.completed_courses
         )
         if error_msg:
             self.log_message(error_msg)
