@@ -3,6 +3,31 @@ Các class model đại diện cho dữ liệu trong hệ thống
 """
 
 
+def chuan_hoa_ma_lop(ma_lop):
+    """
+    Chuẩn hóa mã lớp: Chữ đầu phải viết hoa
+    Ví dụ: a704 -> A704, A704 -> A704
+    """
+    if not ma_lop:
+        return ma_lop
+    ma_lop = ma_lop.strip()
+    if len(ma_lop) > 0:
+        return ma_lop[0].upper() + ma_lop[1:].lower() if len(ma_lop) > 1 else ma_lop[0].upper()
+    return ma_lop
+
+
+def chuan_hoa_ten_giao_vien(ten_gv):
+    """
+    Chuẩn hóa tên giáo viên: Các chữ cái đầu của mỗi từ phải viết hoa
+    Ví dụ: nguyễn văn a -> Nguyễn Văn A
+    """
+    if not ten_gv:
+        return ten_gv
+    # Tách theo khoảng trắng và viết hoa chữ cái đầu mỗi từ
+    words = ten_gv.strip().split()
+    return ' '.join(word.capitalize() for word in words if word)
+
+
 class ThoiGianHoc:
     """Đại diện cho một khung giờ học (thứ, tiết bắt đầu, tiết kết thúc)"""
     

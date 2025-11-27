@@ -155,6 +155,73 @@ def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
     return True, None
 
 
+def kiem_tra_trung_trong_cung_mon(lop_moi, mon_hoc, exclude_lop_id=None):
+    """
+    Kiểm tra xem lớp mới có trùng phòng học, giáo viên và trùng giờ với lớp khác trong cùng môn không
+    (Chỉ kiểm tra trong cùng một môn - dùng khi thêm lớp trong area lớp học)
+    
+    Args:
+        lop_moi: Lớp học mới cần kiểm tra
+        mon_hoc: Môn học chứa lớp mới
+        exclude_lop_id: ID của lớp cần loại trừ khỏi kiểm tra (khi sửa lớp)
+    
+    Returns:
+        Tuple (is_valid, error_msg):
+        - is_valid: True nếu không trùng, False nếu trùng
+        - error_msg: Thông báo lỗi nếu trùng (None nếu không trùng)
+    """
+    # Kiểm tra trùng phòng học trong cùng môn
+    cac_lop_cung_phong = []
+    cac_lop_cung_gv = []
+    
+    for lop in mon_hoc.cac_lop_hoc:
+        # Bỏ qua lớp hiện tại nếu đang sửa
+        if exclude_lop_id and lop.get_id() == exclude_lop_id:
+            continue
+        
+        if lop.ma_lop == lop_moi.ma_lop:
+            cac_lop_cung_phong.append(lop)
+        
+        if lop.ten_giao_vien.strip().lower() == lop_moi.ten_giao_vien.strip().lower():
+            cac_lop_cung_gv.append(lop)
+    
+    # Kiểm tra trùng phòng học và trùng giờ
+    cac_thu_trung_phong = []
+    for lop_cung_phong in cac_lop_cung_phong:
+        for gio_moi in lop_moi.cac_khung_gio:
+            for gio_cu in lop_cung_phong.cac_khung_gio:
+                if gio_moi.thu == gio_cu.thu:
+                    if kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                        ten_thu = TEN_THU_TRONG_TUAN.get(gio_moi.thu, f"Thứ {gio_moi.thu}")
+                        if ten_thu not in cac_thu_trung_phong:
+                            cac_thu_trung_phong.append(ten_thu)
+    
+    if cac_thu_trung_phong:
+        error_msg = (f"Lỗi: Phòng học '{lop_moi.ma_lop}' đã được sử dụng trong môn này vào "
+                    f"{', '.join(cac_thu_trung_phong)}. "
+                    f"Vui lòng chọn phòng khác hoặc thay đổi thời gian học.")
+        return False, error_msg
+    
+    # Kiểm tra trùng giáo viên và trùng giờ
+    cac_thu_trung_gv = []
+    for lop_cung_gv in cac_lop_cung_gv:
+        for gio_moi in lop_moi.cac_khung_gio:
+            for gio_cu in lop_cung_gv.cac_khung_gio:
+                if gio_moi.thu == gio_cu.thu:
+                    if kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                        ten_thu = TEN_THU_TRONG_TUAN.get(gio_moi.thu, f"Thứ {gio_moi.thu}")
+                        if ten_thu not in cac_thu_trung_gv:
+                            cac_thu_trung_gv.append(ten_thu)
+    
+    if cac_thu_trung_gv:
+        error_msg = (f"Lỗi: Giáo viên '{lop_moi.ten_giao_vien}' đã có lớp khác trong môn này vào "
+                    f"{', '.join(cac_thu_trung_gv)}. "
+                    f"Một giáo viên không thể dạy nhiều lớp cùng lúc.")
+        return False, error_msg
+    
+    return True, None
+
+
 def kiem_tra_trung_giao_vien(lop_moi, all_courses, exclude_lop_id=None):
     """
     Kiểm tra xem giáo viên của lớp mới có trùng giờ với lớp khác không

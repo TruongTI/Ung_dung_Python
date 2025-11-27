@@ -104,14 +104,21 @@ class ClassDialog(QDialog):
 
     def get_data(self):
         """Lấy dữ liệu từ dialog"""
+        from ..models import chuan_hoa_ma_lop, chuan_hoa_ten_giao_vien
+        
         ma_mon = self.mon_hoc_combo.currentText()
-        ma_lop = self.ma_lop_edit.text().strip().upper()
-        ten_gv = self.ten_gv_edit.text().strip()
+        ma_lop_raw = self.ma_lop_edit.text().strip()
+        ten_gv_raw = self.ten_gv_edit.text().strip()
         loai_lop = self.loai_lop_combo.currentText()
         ten_thu = self.thu_combo.currentText()
         thu = [k for k, v in TEN_THU_TRONG_TUAN.items() if v == ten_thu][0]
         tiet_bd = self.tiet_bd_spin.value()
         tiet_kt = self.tiet_kt_spin.value()
+        
+        # Chuẩn hóa định dạng
+        ma_lop = chuan_hoa_ma_lop(ma_lop_raw)
+        ten_gv = chuan_hoa_ten_giao_vien(ten_gv_raw)
+        
         if not ma_mon or not ma_lop or not ten_gv or tiet_bd > tiet_kt:
             return None
         return {

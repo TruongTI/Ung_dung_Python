@@ -13,7 +13,7 @@ from PyQt6.QtCore import Qt, QTime, QSettings
 from PyQt6.QtGui import QFont, QAction
 
 from ..models import MonHoc, LopHoc, LichBan
-from ..scheduler import tim_thoi_khoa_bieu, kiem_tra_trung_phong_hoc, kiem_tra_trung_giao_vien
+from ..scheduler import tim_thoi_khoa_bieu, kiem_tra_trung_trong_cung_mon
 from ..data_handler import (
     save_data, load_data, create_sample_data_if_not_exists,
     save_completed_courses, load_completed_courses,
@@ -222,6 +222,10 @@ class MainWindow(QMainWindow):
         save_action.triggered.connect(self.handle_save_data)
         file_menu.addAction(save_action)
         file_menu.addSeparator()
+        import_tkb_action = QAction("Import thời khóa biểu", self)
+        import_tkb_action.triggered.connect(self.handle_import_tkb)
+        file_menu.addAction(import_tkb_action)
+        file_menu.addSeparator()
         exit_action = QAction("Thoát", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
@@ -394,16 +398,10 @@ class MainWindow(QMainWindow):
                                loai_lop=data.get('loai_lop', 'Lớp'))
                 new_lop.them_khung_gio(data['thu'], data['tiet_bd'], data['tiet_kt'])
                 
-                # Kiểm tra trùng phòng học và trùng giờ
-                is_valid, error_msg = kiem_tra_trung_phong_hoc(new_lop, self.all_courses)
+                # Kiểm tra trùng trong cùng môn (phòng học, giáo viên và trùng giờ)
+                is_valid, error_msg = kiem_tra_trung_trong_cung_mon(new_lop, mon_hoc)
                 if not is_valid:
-                    QMessageBox.warning(self, "Lỗi trùng phòng học", error_msg)
-                    return
-                
-                # Kiểm tra trùng giáo viên và trùng giờ
-                is_valid, error_msg = kiem_tra_trung_giao_vien(new_lop, self.all_courses)
-                if not is_valid:
-                    QMessageBox.warning(self, "Lỗi trùng giáo viên", error_msg)
+                    QMessageBox.warning(self, "Lỗi", error_msg)
                     return
                 
                 # Thêm lớp học (hàm này sẽ kiểm tra trùng giờ trong cùng môn và cùng phòng)
@@ -746,6 +744,122 @@ class MainWindow(QMainWindow):
                 self.log_message(f"Đã lưu TKB thành công vào: {file_path}")
             except Exception as e:
                 self.log_message(f"Lỗi khi lưu TKB: {e}")
+
+    def handle_import_tkb(self):
+        """Import TKB từ file đã lưu"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Thời khóa biểu", "", "Text Files (*.txt);;All Files (*)"
+        )
+        if not file_path:
+            return
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse file để tìm các lớp học
+            imported_classes = []
+            lines = content.split('\n')
+            i = 0
+            current_ma_mon = None
+            current_ma_lop = None
+            current_ten_gv = None
+            current_khung_gio = []
+            
+            while i < len(lines):
+                line = lines[i].strip()
+                
+                # Tìm dòng "Môn: ..."
+                if line.startswith("Môn:"):
+                    # Lưu lớp học trước đó nếu có
+                    if current_ma_mon and current_ma_lop and current_ten_gv and current_khung_gio:
+                        # Tìm lớp học trong all_courses
+                        if current_ma_mon in self.all_courses:
+                            mon_hoc = self.all_courses[current_ma_mon]
+                            for lop in mon_hoc.cac_lop_hoc:
+                                if (lop.ma_lop == current_ma_lop and 
+                                    lop.ten_giao_vien.strip().lower() == current_ten_gv.strip().lower()):
+                                    # Kiểm tra khung giờ có khớp không
+                                    lop_khung_gio = [(g.thu, g.tiet_bat_dau, g.tiet_ket_thuc) 
+                                                     for g in lop.cac_khung_gio]
+                                    if set(current_khung_gio) == set(lop_khung_gio):
+                                        imported_classes.append(lop)
+                                        break
+                    
+                    # Parse mã môn từ dòng "Môn: Tên môn (Mã môn)"
+                    if '(' in line and ')' in line:
+                        ma_mon = line.split('(')[1].split(')')[0].strip()
+                        current_ma_mon = ma_mon
+                        current_ma_lop = None
+                        current_ten_gv = None
+                        current_khung_gio = []
+                
+                # Tìm dòng "  Lớp: ..."
+                elif line.startswith("Lớp:"):
+                    current_ma_lop = line.replace("Lớp:", "").strip()
+                
+                # Tìm dòng "  GV: ..."
+                elif line.startswith("GV:"):
+                    current_ten_gv = line.replace("GV:", "").strip()
+                
+                # Tìm dòng "  Thời gian: ..."
+                elif line.startswith("Thời gian:"):
+                    # Parse "Thời gian: Thứ X, Tiết Y-Z"
+                    time_part = line.replace("Thời gian:", "").strip()
+                    if "," in time_part:
+                        thu_part = time_part.split(",")[0].strip()
+                        tiet_part = time_part.split(",")[1].strip()
+                        
+                        # Tìm số thứ từ tên thứ
+                        thu = None
+                        for k, v in TEN_THU_TRONG_TUAN.items():
+                            if v == thu_part:
+                                thu = k
+                                break
+                        
+                        # Parse tiết "Tiết Y-Z"
+                        if thu and "Tiết" in tiet_part:
+                            tiet_str = tiet_part.replace("Tiết", "").strip()
+                            if "-" in tiet_str:
+                                tiet_bd = int(tiet_str.split("-")[0].strip())
+                                tiet_kt = int(tiet_str.split("-")[1].strip())
+                                current_khung_gio.append((thu, tiet_bd, tiet_kt))
+                
+                i += 1
+            
+            # Lưu lớp học cuối cùng
+            if current_ma_mon and current_ma_lop and current_ten_gv and current_khung_gio:
+                if current_ma_mon in self.all_courses:
+                    mon_hoc = self.all_courses[current_ma_mon]
+                    for lop in mon_hoc.cac_lop_hoc:
+                        if (lop.ma_lop == current_ma_lop and 
+                            lop.ten_giao_vien.strip().lower() == current_ten_gv.strip().lower()):
+                            lop_khung_gio = [(g.thu, g.tiet_bat_dau, g.tiet_ket_thuc) 
+                                             for g in lop.cac_khung_gio]
+                            if set(current_khung_gio) == set(lop_khung_gio):
+                                imported_classes.append(lop)
+                                break
+            
+            if not imported_classes:
+                QMessageBox.warning(self, "Lỗi", 
+                                  "Không tìm thấy lớp học nào trong file. "
+                                  "Vui lòng kiểm tra lại file hoặc đảm bảo các lớp học đã được thêm vào hệ thống.")
+                return
+            
+            # Hiển thị TKB đã import
+            self.danh_sach_tkb_tim_duoc = [imported_classes]
+            self.current_tkb_index = 0
+            active_busy_times = self._get_active_busy_times()
+            self.schedule_view.display_schedule(imported_classes, self.all_courses, active_busy_times)
+            self.update_nav_buttons()
+            self.update_tkb_info_label()
+            self.log_message(f"Đã import TKB thành công: {len(imported_classes)} lớp học")
+            QMessageBox.information(self, "Thành công", 
+                                  f"Đã import TKB thành công!\nTìm thấy {len(imported_classes)} lớp học.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Không thể import TKB: {e}")
+            self.log_message(f"Lỗi khi import TKB: {e}")
 
     def log_message(self, message):
         """Ghi log vào notification browser"""

@@ -131,15 +131,15 @@ class ScheduleWidget(QWidget):
             painter.drawLine(int(x), 0, int(x), self.height())
             
     def _draw_busy_times(self, painter):
-        """Vẽ các giờ bận lên lưới với màu trắng, giống như các môn học"""
+        """Vẽ các giờ bận lên lưới với màu và font khác với môn học"""
         if not self.busy_times:
             return
         
         is_dark = self._is_dark_mode()
-        # Màu trắng cho giờ bận
-        busy_color = QColor("#ffffff")
-        border_color = QColor("#888888") if is_dark else QColor("#666666")
-        text_color = QColor("#000000")  # Text màu đen để nổi bật trên nền trắng
+        # Màu xám nhạt cho giờ bận (khác với môn học)
+        busy_color = QColor("#f0f0f0") if not is_dark else QColor("#3a3a3a")
+        border_color = QColor("#cccccc") if not is_dark else QColor("#666666")
+        text_color = QColor("#666666") if not is_dark else QColor("#aaaaaa")  # Text màu xám
         
         for busy_time in self.busy_times:
             # Chuyển đổi giờ sang tiết
@@ -167,23 +167,25 @@ class ScheduleWidget(QWidget):
                 rect_width = self.CELL_WIDTH
                 rect_height = (tiet_kt - tiet_bd + 1) * self.CELL_HEIGHT
                 
-                # Vẽ vùng giờ bận với màu trắng, giống như các môn học
+                # Vẽ vùng giờ bận với màu xám nhạt
                 painter.setBrush(QBrush(busy_color))
                 painter.setPen(QPen(border_color, 1))
                 painter.drawRoundedRect(int(x)+2, int(y)+2, int(rect_width)-4, 
                                       int(rect_height)-4, 5, 5)
                 
-                # Vẽ text với thông tin giờ bận và lý do
+                # Vẽ text với font nhỏ hơn và màu khác
                 painter.setPen(text_color)
-                painter.setFont(QFont("Segoe UI", 12))
+                painter.setFont(QFont("Segoe UI", 9))  # Font nhỏ hơn (9 thay vì 12)
                 text_rect = int(x)+5, int(y)+5, int(rect_width)-10, int(rect_height)-10
                 text_flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
                 
-                # Format text hiển thị thông tin giờ bận và lý do
+                # Format text hiển thị thông tin giờ bận và lý do (ngắn gọn hơn)
                 gio_bd_str = busy_time.gio_bat_dau.toString("HH:mm")
                 gio_kt_str = busy_time.gio_ket_thuc.toString("HH:mm")
                 ten_thu = TEN_THU_TRONG_TUAN.get(busy_time.thu, f"Thứ {busy_time.thu}")
-                text_content = f"Giờ bận\n{ten_thu}\n{gio_bd_str} - {gio_kt_str}\n{busy_time.ly_do}"
+                # Rút gọn text để tránh vỡ chữ
+                ly_do_short = busy_time.ly_do[:15] + "..." if len(busy_time.ly_do) > 15 else busy_time.ly_do
+                text_content = f"BẬN\n{ten_thu}\n{gio_bd_str}-{gio_kt_str}\n{ly_do_short}"
                 
                 painter.drawText(text_rect[0], text_rect[1], text_rect[2], text_rect[3], 
                                text_flags, text_content)
@@ -192,7 +194,7 @@ class ScheduleWidget(QWidget):
         """Vẽ các lớp học lên lưới"""
         is_dark = self._is_dark_mode()
         border_color = QColor("#888888") if is_dark else QColor("#666666")
-        text_color = QColor("#ffffff") if is_dark else QColor("#000000")
+        text_color = QColor("#000000") if is_dark else QColor("#000000")
         
         for lop_hoc in self.current_schedule:
             for khung_gio in lop_hoc.cac_khung_gio:
@@ -202,7 +204,7 @@ class ScheduleWidget(QWidget):
                     y = self.HEADER_HEIGHT + (khung_gio.tiet_bat_dau - 1) * self.CELL_HEIGHT
                     rect_width = self.CELL_WIDTH
                     rect_height = (khung_gio.tiet_ket_thuc - khung_gio.tiet_bat_dau + 1) * self.CELL_HEIGHT
-                    color = QColor(self.schedule_colors.get(lop_hoc.ma_mon, "#ADD8E6"))
+                    color = QColor(self.schedule_colors.get(lop_hoc.ma_mon, "#ffffff"))
                     painter.setBrush(QBrush(color))
                     painter.setPen(QPen(border_color, 1))
                     painter.drawRoundedRect(int(x)+2, int(y)+2, int(rect_width)-4, 
