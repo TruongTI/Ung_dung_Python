@@ -4,7 +4,7 @@ Widget hiển thị thời khóa biểu dạng lưới
 
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QDate, pyqtSignal
-from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPen
+from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPen, QFontMetrics
 from PyQt6.QtWidgets import QSizePolicy
 
 from ..constants import TEN_THU_TRONG_TUAN
@@ -211,13 +211,70 @@ class ScheduleWidget(QWidget):
                     painter.setPen(QPen(border_color, 1))
                     painter.drawRoundedRect(int(x)+2, int(y)+2, int(rect_width)-4, 
                                           int(rect_height)-4, 5, 5)
-                    painter.setPen(text_color)
                     text_rect = int(x)+5, int(y)+5, int(rect_width)-10, int(rect_height)-10
-                    text_flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
-                    text_content = (f"{lop_hoc.ten_mon}\n({lop_hoc.ma_mon})\n"
-                                  f"Lớp: {lop_hoc.ma_lop}\nGV: {lop_hoc.ten_giao_vien}")
-                    painter.drawText(text_rect[0], text_rect[1], text_rect[2], text_rect[3], 
-                                   text_flags, text_content)
+                    text_rect_x, text_rect_y, text_rect_w, text_rect_h = text_rect
+                    current_y = text_rect_y
+                    
+                    # Vẽ mã lớp to hơn, đậm và màu khác
+                    painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+                    ma_lop_text = f"Lớp: {lop_hoc.ma_lop}"
+                    font_metrics = painter.fontMetrics()
+                    # Tính chiều cao với word wrap
+                    ma_lop_rect = font_metrics.boundingRect(
+                        text_rect_x, text_rect_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_lop_text
+                    )
+                    ma_lop_height = ma_lop_rect.height()
+                    # Đặt màu xanh cho mã lớp
+                    ma_lop_color = QColor("#0066CC") 
+                    painter.setPen(ma_lop_color)
+                    painter.drawText(text_rect_x, current_y, text_rect_w, ma_lop_height,
+                                   Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_lop_text)
+                    current_y += ma_lop_height + 2  # Thêm khoảng cách nhỏ
+                    
+                    # Vẽ các phần còn lại với font bình thường và word wrap
+                    painter.setFont(QFont("Segoe UI", 9))
+                    painter.setPen(text_color)
+                    normal_font_metrics = painter.fontMetrics()
+                    
+                    # Vẽ tên môn với word wrap, màu riêng, cỡ chữ lớn hơn và in đậm
+                    ten_mon_color = QColor("#DC143C")
+                    painter.setPen(ten_mon_color)
+                    # Đặt font cho tên môn: size 10, Bold
+                    painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+                    ten_mon_font_metrics = painter.fontMetrics()
+                    ten_mon_rect = ten_mon_font_metrics.boundingRect(
+                        text_rect_x, current_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, lop_hoc.ten_mon
+                    )
+                    ten_mon_height = ten_mon_rect.height()
+                    painter.drawText(text_rect_x, current_y, text_rect_w, ten_mon_height,
+                                   Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, lop_hoc.ten_mon)
+                    # Đặt lại font và màu text mặc định cho các phần sau
+                    painter.setFont(QFont("Segoe UI", 9))
+                    painter.setPen(text_color)
+                    current_y += ten_mon_height + 2
+                    
+                    # Vẽ mã môn với word wrap
+                    ma_mon_text = f"({lop_hoc.ma_mon})"
+                    ma_mon_rect = normal_font_metrics.boundingRect(
+                        text_rect_x, current_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_mon_text
+                    )
+                    ma_mon_height = ma_mon_rect.height()
+                    painter.drawText(text_rect_x, current_y, text_rect_w, ma_mon_height,
+                                   Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_mon_text)
+                    current_y += ma_mon_height + 2
+                    
+                    # Vẽ giáo viên với word wrap
+                    gv_text = f"GV: {lop_hoc.ten_giao_vien}"
+                    gv_rect = normal_font_metrics.boundingRect(
+                        text_rect_x, current_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, gv_text
+                    )
+                    gv_height = gv_rect.height()
+                    painter.drawText(text_rect_x, current_y, text_rect_w, gv_height,
+                                   Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, gv_text)
 
     def display_schedule(self, tkb, all_courses, busy_times=None):
         """Hiển thị một thời khóa biểu lên widget"""
