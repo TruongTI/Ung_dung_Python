@@ -87,6 +87,8 @@ class ScheduleWidget(QWidget):
         text_color = QColor("#ffffff") if is_dark else QColor("#ffffff")
         grid_color = QColor("#666666") if is_dark else QColor("#d0d0d0")
         bg_color = QColor("#1e1e1e") if is_dark else QColor("#ffffff")
+
+        
         
         # Vẽ nền
         painter.fillRect(0, 0, self.width(), self.height(), bg_color)

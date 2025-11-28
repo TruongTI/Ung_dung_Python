@@ -495,8 +495,7 @@ class MainWindow(QMainWindow):
         """Hiển thị thông tin về ứng dụng"""
         QMessageBox.about(self, "Giới thiệu", 
                         "Công cụ Sắp xếp TKB Pro\n\n"
-                        "Phiên bản 3.0\n"
-                        "Phát triển bởi bạn và Gemini.")
+                        "Phiên bản 3.0")
     
     def handle_delete_course(self, ma_mon):
         """Xử lý xóa môn học"""
