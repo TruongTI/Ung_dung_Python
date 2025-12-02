@@ -3,7 +3,7 @@ Widget hiển thị thời khóa biểu dạng lưới
 """
 
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import Qt, QDate, pyqtSignal
+from PyQt6.QtCore import Qt, QDate, pyqtSignal, QRect
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPen, QFontMetrics
 from PyQt6.QtWidgets import QSizePolicy
 
@@ -326,4 +326,37 @@ class ScheduleWidget(QWidget):
             if mon_hoc.color_hex:
                 self.schedule_colors[ma_mon] = mon_hoc.color_hex
         self.update()
+
+    def display_schedule_partial(self, tkb, all_courses, busy_times=None, dirty_rects=None):
+        """
+        Cập nhật TKB và/hoặc giờ bận nhưng chỉ repaint các vùng cần thiết.
+        dirty_rects: danh sách QRect (tọa độ theo widget) cần update.
+        """
+        self.current_schedule = tkb
+        self.busy_times = busy_times or []
+        self.schedule_colors.clear()
+
+        from ..scheduler import _find_lop_by_id_helper
+        self.constrained_classes = set()
+        for lop in tkb:
+            if lop.lop_rang_buoc:
+                self.constrained_classes.add(id(lop))
+                for rang_buoc_id in lop.lop_rang_buoc:
+                    lop_rang_buoc = _find_lop_by_id_helper(rang_buoc_id, all_courses)
+                    if lop_rang_buoc:
+                        for lop_khac in tkb:
+                            if lop_khac is lop_rang_buoc:
+                                self.constrained_classes.add(id(lop_khac))
+                                break
+
+        for ma_mon, mon_hoc in all_courses.items():
+            if mon_hoc.color_hex:
+                self.schedule_colors[ma_mon] = mon_hoc.color_hex
+
+        if dirty_rects:
+            for rect in dirty_rects:
+                self.update(rect)
+        else:
+            # Fallback: repaint toàn bộ nếu không cung cấp vùng cụ thể
+            self.update()
 

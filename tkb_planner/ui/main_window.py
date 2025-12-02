@@ -706,7 +706,10 @@ class MainWindow(QMainWindow):
             check = CustomCheckBox(str(busy_time))
             check.setChecked(False)  # Mặc định không tích
             check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            check.toggled.connect(lambda: self._update_schedule_display())  # Cập nhật khi toggle
+            # Cập nhật hiển thị theo vùng khi toggle để tránh repaint toàn bộ
+            check.toggled.connect(
+                lambda checked, bid=busy_id: self._update_schedule_display_partial(bid)
+            )
             
             delete_btn = QPushButton("Xoá")
             delete_btn.setMinimumWidth(55)
@@ -745,7 +748,10 @@ class MainWindow(QMainWindow):
         check = CustomCheckBox(str(new_busy_time))
         check.setChecked(False)  # Mặc định không tích
         check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        check.toggled.connect(lambda: self._update_schedule_display())  # Cập nhật khi toggle
+        # Cập nhật hiển thị theo vùng khi toggle để tránh repaint toàn bộ
+        check.toggled.connect(
+            lambda checked, bid=busy_id: self._update_schedule_display_partial(bid)
+        )
         
         delete_btn = QPushButton("Xoá")
         delete_btn.setMinimumWidth(55)  # Thay vì setFixedWidth
@@ -948,6 +954,72 @@ class MainWindow(QMainWindow):
             self.schedule_view.display_schedule(tkb, self.all_courses, active_busy_times)
         else:
             self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
+
+    def _update_schedule_display_partial(self, busy_id):
+        """
+        Cập nhật hiển thị lịch khi một giờ bận được toggle.
+        Chỉ repaint vùng tương ứng với giờ bận đó để tránh repaint toàn bộ widget.
+        """
+        # Lấy danh sách giờ bận đang được tích
+        active_busy_times = self._get_active_busy_times()
+
+        # Xác định TKB hiện tại (nếu có)
+        if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+            tkb = self.danh_sach_tkb_tim_duoc[self.current_tkb_index]
+        else:
+            tkb = []
+
+        # Tìm đối tượng LichBan theo busy_id
+        busy_time = next((b for b in self.danh_sach_gio_ban if b.id == busy_id), None)
+        if not busy_time:
+            # Nếu không tìm thấy, fallback repaint toàn bộ
+            self.schedule_view.display_schedule(tkb, self.all_courses, active_busy_times)
+            return
+
+        # Chuyển giờ sang tiết để tính vùng cần repaint
+        from ..models import LichBan
+
+        tiet_bd = busy_time.time_to_tiet(busy_time.gio_bat_dau)
+        tiet_kt = busy_time.time_to_tiet(busy_time.gio_ket_thuc)
+        if tiet_bd == -1:
+            tiet_bd = LichBan._find_nearest_tiet(busy_time.gio_bat_dau)
+        if tiet_kt == -1:
+            tiet_kt = LichBan._find_nearest_tiet(busy_time.gio_ket_thuc)
+        if tiet_bd == -1 or tiet_kt == -1:
+            # Không tính được vùng cụ thể, repaint toàn bộ
+            self.schedule_view.display_schedule(tkb, self.all_courses, active_busy_times)
+            return
+
+        if tiet_bd > tiet_kt:
+            tiet_bd, tiet_kt = tiet_kt, tiet_bd
+
+        # Tính toán rect tương ứng với vùng giờ bận trên ScheduleWidget
+        thu_index = busy_time.thu - 2  # 2 (Thứ 2) -> index 0
+        if thu_index < 0:
+            self.schedule_view.display_schedule(tkb, self.all_courses, active_busy_times)
+            return
+
+        # Sử dụng CELL_WIDTH / CELL_HEIGHT hiện tại của schedule_view
+        x = self.schedule_view.TIME_COL_WIDTH + thu_index * self.schedule_view.CELL_WIDTH
+        y = self.schedule_view.HEADER_HEIGHT + (tiet_bd - 1) * self.schedule_view.CELL_HEIGHT
+        rect_width = self.schedule_view.CELL_WIDTH
+        rect_height = (tiet_kt - tiet_bd + 1) * self.schedule_view.CELL_HEIGHT
+
+        dirty_rect = self.schedule_view.rect().intersected(
+            self.schedule_view.rect().__class__(
+                int(x) + 1,
+                int(y) + 1,
+                int(rect_width) - 2,
+                int(rect_height) - 2,
+            )
+        )
+
+        self.schedule_view.display_schedule_partial(
+            tkb,
+            self.all_courses,
+            active_busy_times,
+            dirty_rects=[dirty_rect],
+        )
 
     def handle_save_tkb(self):
         """Lưu TKB hiện tại ra file"""
