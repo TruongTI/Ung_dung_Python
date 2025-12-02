@@ -13,7 +13,7 @@ from PyQt6.QtCore import Qt, QTime, QSettings
 from PyQt6.QtGui import QFont, QAction
 
 from ..models import MonHoc, LopHoc, LichBan
-from ..scheduler import tim_thoi_khoa_bieu, kiem_tra_trung_trong_cung_mon
+from ..scheduler import tim_thoi_khoa_bieu, kiem_tra_trung_trong_cung_mon, update_bidirectional_constraints
 from ..data_handler import (
     save_data, load_data, create_sample_data_if_not_exists,
     save_completed_courses, load_completed_courses,
@@ -428,6 +428,11 @@ class MainWindow(QMainWindow):
                     QMessageBox.warning(self, "Lỗi", 
                                       f"Lớp học '{data['ma_lop']}' đã tồn tại với cùng giờ học trong môn này.")
                     return
+                
+                # Cập nhật ràng buộc 2 chiều cho lớp mới
+                new_lop_id = new_lop.get_id()
+                new_rang_buoc = data.get('lop_rang_buoc', [])
+                update_bidirectional_constraints(None, [], new_lop_id, new_rang_buoc, self.all_courses)
                 
                 save_data(self.all_courses)
                 self.log_message(f"Đã thêm lớp {data['ma_lop']} cho môn {data['ma_mon']}")

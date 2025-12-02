@@ -65,6 +65,12 @@ class ClassDialog(QDialog):
         self.lop_hoc_hien_tai = lop_hoc_hien_tai
         self.layout = QFormLayout(self)
         
+        # Lưu font gốc của dialog để đảm bảo font size không bị thay đổi
+        self.original_dialog_font = self.font()
+        # Đảm bảo font size tối thiểu là 10
+        if self.original_dialog_font.pointSize() < 10 or self.original_dialog_font.pointSize() == -1:
+            self.original_dialog_font.setPointSize(10)
+        
         self.mon_hoc_combo = QComboBox()
         self.mon_hoc_combo.addItems(sorted(all_courses.keys()))
         # Nếu có fixed_mon_hoc, set và disable combo box
@@ -163,6 +169,29 @@ class ClassDialog(QDialog):
             # Nếu đang thêm mới, lấy loại lớp từ combo box
             loai_lop_hien_tai = self.loai_lop_combo.currentText()
         
+        # Tìm tất cả các lớp ràng buộc 2 chiều (cả lớp ràng buộc trực tiếp và lớp ràng buộc ngược lại)
+        # Sử dụng set các object reference để đảm bảo chỉ lưu lớp cụ thể, không phải tất cả lớp cùng ID
+        from ..scheduler import _find_lop_by_id_helper
+        lop_rang_buoc_objects = set()
+        if self.lop_hoc_hien_tai:
+            # Lấy các lớp ràng buộc trực tiếp (lớp hiện tại ràng buộc với các lớp này)
+            if self.lop_hoc_hien_tai.lop_rang_buoc:
+                # Tìm các lớp object cụ thể từ ID (sử dụng helper để hỗ trợ cả format cũ và mới)
+                for rang_buoc_id in self.lop_hoc_hien_tai.lop_rang_buoc:
+                    lop_rang_buoc = _find_lop_by_id_helper(rang_buoc_id, self.all_courses)
+                    if lop_rang_buoc:
+                        lop_rang_buoc_objects.add(lop_rang_buoc)
+            
+            # Thêm logic ràng buộc 2 chiều: nếu lớp hiện tại được ràng buộc bởi lớp khác,
+            # thì lớp đó cũng phải được hiển thị trong list
+            current_lop_id = self.lop_hoc_hien_tai.get_id()
+            # Tìm tất cả các lớp có ràng buộc với lớp hiện tại (chỉ lấy lớp cụ thể)
+            for mon_hoc in self.all_courses.values():
+                for lop in mon_hoc.cac_lop_hoc:
+                    if lop.lop_rang_buoc and current_lop_id in lop.lop_rang_buoc:
+                        # Lớp này ràng buộc với lớp hiện tại, thêm object cụ thể vào danh sách
+                        lop_rang_buoc_objects.add(lop)
+        
         # Lấy môn học hiện tại
         if self.fixed_mon_hoc:
             ma_mon_hien_tai = self.fixed_mon_hoc.ma_mon
@@ -178,28 +207,30 @@ class ClassDialog(QDialog):
                 if lop_hien_tai and lop is lop_hien_tai:
                     continue
                 
-                # Nếu lớp hiện tại là "Lý thuyết" hoặc "Bài tập", chỉ hiển thị các lớp "Lý thuyết" và "Bài tập"
-                # Nếu lớp hiện tại là "Lớp", hiển thị tất cả các lớp khác
-                if loai_lop_hien_tai in ["Lý thuyết", "Bài tập"]:
-                    # Chỉ hiển thị lớp "Lý thuyết" và "Bài tập", không hiển thị "Lớp"
-                    if lop.loai_lop not in ["Lý thuyết", "Bài tập"]:
-                        continue
-                # Nếu loại lớp hiện tại là "Lớp", hiển thị tất cả (không cần filter)
+                lop_id = lop.get_id()
+                # Kiểm tra xem lớp này có phải là lớp ràng buộc 2 chiều không (so sánh bằng object reference)
+                is_rang_buoc_2_chieu = lop in lop_rang_buoc_objects
                 
-                # Kiểm tra trùng giờ: chỉ hiển thị các lớp không trùng giờ với lớp hiện tại
-                # Tuy nhiên, nếu lớp đó đã có trong danh sách ràng buộc hoặc đã được chọn, vẫn hiển thị
-                # Chỉ kiểm tra khi đang sửa lớp (có lop_hien_tai)
-                if lop_hien_tai:
-                    # Kiểm tra xem lớp này có trong danh sách ràng buộc không
-                    lop_id = lop.get_id()
-                    is_in_rang_buoc = (lop_hien_tai.lop_rang_buoc and 
-                                      lop_id in lop_hien_tai.lop_rang_buoc)
-                    # Kiểm tra xem lớp này có trong danh sách đã chọn không
-                    is_in_selected = lop_id in selected_lop_ids
+                # Nếu lớp này là lớp ràng buộc 2 chiều, luôn hiển thị (bỏ qua tất cả filter)
+                if not is_rang_buoc_2_chieu:
+                    # Nếu lớp hiện tại là "Lý thuyết" hoặc "Bài tập", chỉ hiển thị các lớp "Lý thuyết" và "Bài tập"
+                    # Nếu lớp hiện tại là "Lớp", hiển thị tất cả các lớp khác
+                    if loai_lop_hien_tai in ["Lý thuyết", "Bài tập"]:
+                        # Chỉ hiển thị lớp "Lý thuyết" và "Bài tập", không hiển thị "Lớp"
+                        if lop.loai_lop not in ["Lý thuyết", "Bài tập"]:
+                            continue
+                    # Nếu loại lớp hiện tại là "Lớp", hiển thị tất cả (không cần filter)
                     
-                    # Nếu trùng giờ và không phải là lớp ràng buộc/đã chọn, bỏ qua
-                    if check_trung_lich(lop_hien_tai, lop) and not is_in_rang_buoc and not is_in_selected:
-                        continue  # Bỏ qua lớp trùng giờ (trừ khi là lớp ràng buộc hoặc đã chọn)
+                    # Kiểm tra trùng giờ: chỉ hiển thị các lớp không trùng giờ với lớp hiện tại
+                    # Tuy nhiên, nếu lớp đó đã được chọn, vẫn hiển thị
+                    # Chỉ kiểm tra khi đang sửa lớp (có lop_hien_tai)
+                    if lop_hien_tai:
+                        # Kiểm tra xem lớp này có trong danh sách đã chọn không
+                        is_in_selected = lop_id in selected_lop_ids
+                        
+                        # Nếu trùng giờ và không phải là lớp ràng buộc/đã chọn, bỏ qua
+                        if check_trung_lich(lop_hien_tai, lop) and not is_in_selected:
+                            continue  # Bỏ qua lớp trùng giờ (trừ khi đã được chọn)
                 
                 # Tạo chuỗi hiển thị thứ và giờ học
                 gio_hoc_str = ""
@@ -213,55 +244,57 @@ class ClassDialog(QDialog):
                 item_text = f"{lop.ma_lop} - {lop.ten_giao_vien} [{lop.loai_lop}] - {gio_hoc_str}"
                 item = QListWidgetItem(item_text)
                 item.setData(Qt.ItemDataRole.UserRole, lop.get_id())  # Lưu ID của lớp
-                # Lấy font từ widget để đảm bảo font size không bị thay đổi
-                widget_font = self.rang_buoc_list.font()
-                item.setFont(widget_font)
+                # Đảm bảo font size không bị nhỏ hơn - dùng font gốc của dialog
+                # Tạo font mới từ font gốc của dialog để đảm bảo font size không bị thay đổi
+                item_font = QFont(self.original_dialog_font)
+                # Đảm bảo font size tối thiểu là 10, nhưng giữ nguyên nếu lớn hơn
+                if item_font.pointSize() < 10 or item_font.pointSize() == -1:
+                    item_font.setPointSize(10)
+                item.setFont(item_font)
+                # Lưu font size gốc vào data để có thể khôi phục sau
+                item.setData(Qt.ItemDataRole.UserRole + 2, item_font.pointSize())
                 self.rang_buoc_list.addItem(item)
-        
-        # CHỈ lấy các lớp ràng buộc từ lop_hoc_hien_tai để hiển thị trong list
-        # KHÔNG tự động chọn chúng - người dùng phải tự chọn
-        # Lưu ý: Các lớp ràng buộc 2 chiều sẽ được hiển thị trong list nhưng không tự động được chọn
-        lop_rang_buoc_to_display = set()
-        if self.lop_hoc_hien_tai:
-            # Lấy các lớp ràng buộc trực tiếp (để hiển thị trong list, không tự động chọn)
-            if self.lop_hoc_hien_tai.lop_rang_buoc:
-                lop_rang_buoc_to_display = set(self.lop_hoc_hien_tai.lop_rang_buoc)
-            
-            # Thêm logic ràng buộc 2 chiều: nếu lớp hiện tại được ràng buộc bởi lớp khác,
-            # thì lớp đó cũng phải được hiển thị trong list (nhưng không tự động chọn)
-            current_lop_id = self.lop_hoc_hien_tai.get_id()
-            # Tìm tất cả các lớp có ràng buộc với lớp hiện tại
-            for mon_hoc in self.all_courses.values():
-                for lop in mon_hoc.cac_lop_hoc:
-                    if lop.lop_rang_buoc and current_lop_id in lop.lop_rang_buoc:
-                        # Lớp này ràng buộc với lớp hiện tại, thêm vào danh sách để hiển thị
-                        lop_rang_buoc_to_display.add(lop.get_id())
-        
-        # QUAN TRỌNG: Chỉ dùng selected_lop_ids nếu đây là lần populate lại (list đã có items trước đó)
-        # Nếu là lần đầu populate (selected_lop_ids rỗng), KHÔNG auto chọn bất kỳ lớp nào
-        # Nếu là lần populate lại, CHỈ giữ lại những lớp đã được chọn trước đó (selected_lop_ids)
-        # KHÔNG tự động thêm các lớp ràng buộc vào selected
         
         # Lấy danh sách tất cả các lop_id có trong list mới (sau khi populate)
         available_lop_ids = set()
+        # Tạo mapping từ ID sang object để kiểm tra chính xác
+        available_lop_objects = {}  # {lop_id: [list of lop objects]}
         for i in range(self.rang_buoc_list.count()):
             item = self.rang_buoc_list.item(i)
             lop_id = item.data(Qt.ItemDataRole.UserRole)
             if lop_id:
                 available_lop_ids.add(lop_id)
+                # Tìm object tương ứng với ID này
+                if ma_mon_hien_tai and ma_mon_hien_tai in self.all_courses:
+                    mon_hoc = self.all_courses[ma_mon_hien_tai]
+                    for lop in mon_hoc.cac_lop_hoc:
+                        if lop.get_id() == lop_id:
+                            if lop_id not in available_lop_objects:
+                                available_lop_objects[lop_id] = []
+                            available_lop_objects[lop_id].append(lop)
         
-        # QUAN TRỌNG: Không auto chọn các lớp ràng buộc khi mở dialog lần đầu
-        # Chỉ hiển thị chúng trong list, người dùng phải tự chọn
+        # Tìm các ID của các lớp ràng buộc 2 chiều có trong list hiện tại
+        lop_rang_buoc_ids_in_list = set()
+        for lop in lop_rang_buoc_objects:
+            lop_id = lop.get_id()
+            # Kiểm tra xem lớp này có trong list hiện tại không (so sánh object reference)
+            if lop_id in available_lop_objects:
+                for available_lop in available_lop_objects[lop_id]:
+                    if available_lop is lop:  # So sánh object reference
+                        lop_rang_buoc_ids_in_list.add(lop_id)
+                        break
+        
+        # Xử lý việc chọn các lớp ràng buộc
         if not selected_lop_ids:
-            # Lần đầu populate, KHÔNG auto chọn các lớp ràng buộc
-            # Chỉ để rỗng, người dùng sẽ tự chọn
-            final_selected_ids = set()
+            # Lần đầu populate: Tự động chọn các lớp ràng buộc 2 chiều
+            # Điều này đảm bảo khi mở dialog sửa, các lớp ràng buộc đã được chọn sẵn
+            final_selected_ids = lop_rang_buoc_ids_in_list
         else:
-            # Lần populate lại: CHỈ giữ lại những lớp đã được chọn trước đó VÀ có trong list mới
+            # Lần populate lại: Giữ lại những lớp đã được chọn trước đó VÀ có trong list mới
             # Điều này đảm bảo không chọn những lớp không còn trong list
             selected_lop_ids = selected_lop_ids.intersection(available_lop_ids)
-            # KHÔNG tự động thêm các lớp ràng buộc, chỉ giữ lại những lớp đã được chọn
-            final_selected_ids = selected_lop_ids
+            # Đảm bảo các lớp ràng buộc 2 chiều luôn được chọn
+            final_selected_ids = selected_lop_ids.union(lop_rang_buoc_ids_in_list)
         
         # Gán lại để dùng ở dưới
         selected_lop_ids = final_selected_ids
@@ -291,8 +324,24 @@ class ClassDialog(QDialog):
     
     def _update_item_highlight(self, item, is_selected):
         """Cập nhật highlight cho một item cụ thể"""
-        # Lưu font hiện tại để giữ nguyên font size
-        current_font = item.font()
+        # Lấy font size gốc đã lưu, hoặc lấy từ font hiện tại
+        original_font_size = item.data(Qt.ItemDataRole.UserRole + 2)
+        if original_font_size is None or original_font_size < 10:
+            # Nếu chưa có font size gốc, lấy từ font hiện tại hoặc dùng font gốc của dialog
+            current_font = item.font()
+            font_size = current_font.pointSize()
+            if font_size < 10 or font_size == -1:
+                original_font_size = self.original_dialog_font.pointSize()
+                if original_font_size < 10:
+                    original_font_size = 10
+            else:
+                original_font_size = font_size
+            # Lưu lại font size gốc
+            item.setData(Qt.ItemDataRole.UserRole + 2, original_font_size)
+        
+        # Tạo font mới với font size gốc
+        preserved_font = QFont(self.original_dialog_font)
+        preserved_font.setPointSize(original_font_size)
         
         if is_selected:
             # Highlight với nền xám nhạt (mờ hơn, opacity thấp hơn)
@@ -306,8 +355,8 @@ class ClassDialog(QDialog):
             # Màu chữ trắng khi chưa chọn
             item.setForeground(QBrush(QColor(255, 255, 255)))  # Màu trắng
         
-        # Đảm bảo font size không bị thay đổi - set lại font sau khi đổi màu
-        item.setFont(current_font)
+        # Đảm bảo font size không bị thay đổi - set lại font với size gốc sau khi đổi màu
+        item.setFont(preserved_font)
     
     def _update_rang_buoc_highlight(self):
         """Cập nhật highlight (nền xám) cho tất cả các item đã chọn"""
@@ -848,8 +897,9 @@ class EditAllClassesDialog(QDialog):
             
             # Tạo lớp tạm để kiểm tra trùng phòng học
             from ..models import LopHoc
-            from ..scheduler import kiem_tra_trung_trong_cung_mon
+            from ..scheduler import kiem_tra_trung_trong_cung_mon, update_bidirectional_constraints
             old_id = lop.get_id()
+            old_rang_buoc = list(lop.lop_rang_buoc) if lop.lop_rang_buoc else []
             temp_lop = LopHoc(
                 data["ma_lop"],
                 data["ten_gv"],
@@ -876,10 +926,15 @@ class EditAllClassesDialog(QDialog):
             lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
             
             # Nếu mã lớp thay đổi, cần cập nhật lại dict của môn học
-            if old_id != lop.get_id():
+            new_id = lop.get_id()
+            if old_id != new_id:
                 if old_id in mon_hoc.cac_lop_hoc_dict:
                     del mon_hoc.cac_lop_hoc_dict[old_id]
-                mon_hoc.cac_lop_hoc_dict[lop.get_id()] = lop
+                mon_hoc.cac_lop_hoc_dict[new_id] = lop
+            
+            # Cập nhật ràng buộc 2 chiều
+            new_rang_buoc = data.get("lop_rang_buoc", [])
+            update_bidirectional_constraints(old_id, old_rang_buoc, new_id, new_rang_buoc, self.all_courses)
             
             # Lưu và refresh lại giao diện
             from ..data_handler import save_data
@@ -896,11 +951,15 @@ class EditAllClassesDialog(QDialog):
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            # Xóa ràng buộc 2 chiều trước khi xóa lớp
+            from ..scheduler import remove_bidirectional_constraints
+            lop_id = lop.get_id()
+            remove_bidirectional_constraints(lop_id, self.all_courses)
+            
             # Xóa khỏi danh sách lớp của môn học
             if lop in mon_hoc.cac_lop_hoc:
                 mon_hoc.cac_lop_hoc.remove(lop)
             # Xóa khỏi dict nếu có
-            lop_id = lop.get_id()
             if lop_id in mon_hoc.cac_lop_hoc_dict:
                 del mon_hoc.cac_lop_hoc_dict[lop_id]
             

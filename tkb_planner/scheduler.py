@@ -43,10 +43,27 @@ def _kiem_tra_trung_voi_lich(lop_moi, lich_hien_tai, danh_sach_gio_ban):
 
 
 def _tim_lop_rang_buoc(lop_id, all_courses, lop_hien_tai=None):
-    """Tìm lớp học từ ID (ma_mon-ma_lop)
+    """Tìm lớp học từ ID
     
-    Nếu có nhiều lớp cùng ID, ưu tiên lớp không trùng giờ với lop_hien_tai (nếu có)
+    Args:
+        lop_id: ID của lớp (format mới hoặc cũ)
+        all_courses: Dictionary chứa tất cả các môn học
+        lop_hien_tai: Lớp hiện tại (để ưu tiên lớp không trùng giờ)
+    
+    Returns:
+        LopHoc object nếu tìm thấy, None nếu không tìm thấy
     """
+    # Sử dụng helper để tìm lớp (hỗ trợ cả format cũ và mới)
+    lop_tim_duoc = _find_lop_by_id_helper(lop_id, all_courses)
+    
+    # Nếu tìm thấy và là format mới (có nhiều phần), trả về luôn
+    if lop_tim_duoc:
+        parts = lop_id.split("-")
+        if len(parts) >= 6:
+            # Format mới: đã tìm chính xác, trả về luôn
+            return lop_tim_duoc
+    
+    # Format cũ hoặc không tìm thấy: tìm tất cả lớp cùng ID và ưu tiên
     if not all_courses:
         return None
     
@@ -125,31 +142,61 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
         return
     
     for lop_hoc in mon_hien_tai.cac_lop_hoc:
-        if not _kiem_tra_trung_voi_lich(lop_hoc, lich_hien_tai, danh_sach_gio_ban):
-            # Thêm lớp học vào lịch
-            lich_hien_tai.append(lop_hoc)
+        # Kiểm tra xung đột lịch học
+        if _kiem_tra_trung_voi_lich(lop_hoc, lich_hien_tai, danh_sach_gio_ban):
+            continue  # Bỏ qua lớp trùng lịch
+        
+        # Kiểm tra logic: Nếu lớp là "Lý thuyết" hoặc "Bài tập", 
+        # chỉ cho phép 1 lớp cùng loại trong cùng môn xuất hiện trong TKB (trừ khi có ràng buộc)
+        loai_lop = getattr(lop_hoc, 'loai_lop', 'Lớp')
+        if loai_lop in ["Lý thuyết", "Bài tập"]:
+            # Kiểm tra xem đã có lớp cùng loại trong cùng môn chưa
+            da_co_lop_cung_loai = False
+            for lop_trong_lich in lich_hien_tai:
+                if (lop_trong_lich.ma_mon == mon_hien_tai.ma_mon and
+                    getattr(lop_trong_lich, 'loai_lop', 'Lớp') == loai_lop):
+                    # Kiểm tra xem lớp trong lịch có phải là lớp ràng buộc với lớp hiện tại không
+                    lop_trong_lich_id = lop_trong_lich.get_id()
+                    lop_hoc_id = lop_hoc.get_id()
+                    # Nếu không có ràng buộc 2 chiều, không cho phép
+                    co_rang_buoc = False
+                    if lop_hoc.lop_rang_buoc and lop_trong_lich_id in lop_hoc.lop_rang_buoc:
+                        co_rang_buoc = True
+                    if lop_trong_lich.lop_rang_buoc and lop_hoc_id in lop_trong_lich.lop_rang_buoc:
+                        co_rang_buoc = True
+                    
+                    if not co_rang_buoc:
+                        da_co_lop_cung_loai = True
+                        break
             
-            # Thêm các lớp ràng buộc nếu có
-            lop_rang_buoc_da_them = []
-            if _them_lop_rang_buoc(lop_hoc, lich_hien_tai, danh_sach_gio_ban, all_courses):
-                # Đã thêm thành công các lớp ràng buộc, tiếp tục đệ quy
-                _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses)
-            else:
-                # Không thể thêm lớp ràng buộc do xung đột, bỏ qua lớp này
-                pass
-            
-            # Xóa lớp học và các lớp ràng buộc đã thêm
-            lich_hien_tai.pop()  # Xóa lớp chính
-            # Xóa các lớp ràng buộc đã thêm (so sánh bằng object reference)
-            if lop_hoc.lop_rang_buoc and all_courses:
-                for rang_buoc_id in lop_hoc.lop_rang_buoc:
-                    lop_rang_buoc = _tim_lop_rang_buoc(rang_buoc_id, all_courses)
-                    if lop_rang_buoc:
-                        # Tìm và xóa bằng object reference
-                        for i in range(len(lich_hien_tai) - 1, -1, -1):
-                            if lich_hien_tai[i] is lop_rang_buoc:
-                                lich_hien_tai.pop(i)
-                                break
+            # Nếu đã có lớp cùng loại và không có ràng buộc, bỏ qua lớp này
+            if da_co_lop_cung_loai:
+                continue
+        
+        # Thêm lớp học vào lịch
+        lich_hien_tai.append(lop_hoc)
+        
+        # Thêm các lớp ràng buộc nếu có
+        lop_rang_buoc_da_them = []
+        if _them_lop_rang_buoc(lop_hoc, lich_hien_tai, danh_sach_gio_ban, all_courses):
+            # Đã thêm thành công các lớp ràng buộc, tiếp tục đệ quy
+            _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses)
+        else:
+            # Không thể thêm lớp ràng buộc do xung đột, bỏ qua lớp này
+            pass
+        
+        # Xóa lớp học và các lớp ràng buộc đã thêm
+        lich_hien_tai.pop()  # Xóa lớp chính
+        # Xóa các lớp ràng buộc đã thêm (so sánh bằng object reference)
+        if lop_hoc.lop_rang_buoc and all_courses:
+            for rang_buoc_id in lop_hoc.lop_rang_buoc:
+                lop_rang_buoc = _tim_lop_rang_buoc(rang_buoc_id, all_courses)
+                if lop_rang_buoc:
+                    # Tìm và xóa bằng object reference
+                    for i in range(len(lich_hien_tai) - 1, -1, -1):
+                        if lich_hien_tai[i] is lop_rang_buoc:
+                            lich_hien_tai.pop(i)
+                            break
 
 
 def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, completed_courses=None, all_courses=None):
@@ -367,3 +414,117 @@ def kiem_tra_trung_giao_vien(lop_moi, all_courses, exclude_lop_id=None):
     # Không trùng giờ, cho phép thêm
     return True, None
 
+
+def _find_lop_by_id_helper(lop_id, all_courses):
+    """
+    Helper function để tìm lớp học theo ID
+    
+    Args:
+        lop_id: ID của lớp 
+            - Format mới: "ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc"
+            - Format cũ (tương thích): "ma_mon-ma_lop"
+        all_courses: Dictionary chứa tất cả các môn học
+    
+    Returns:
+        LopHoc object nếu tìm thấy, None nếu không tìm thấy
+    """
+    if not all_courses:
+        return None
+    
+    # Kiểm tra format ID: nếu có nhiều dấu "-" thì là format mới
+    # Format mới: "ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc"
+    # Tên giáo viên ở đầu, dễ parse từ phải sang trái
+    # Tách từ phải sang trái: 5 phần cuối là tiet_ket_thuc, tiet_bat_dau, thu, ma_lop, ma_mon
+    # Phần còn lại ở đầu là ten_giao_vien
+    
+    parts = lop_id.split("-")
+    
+    if len(parts) >= 6:
+        try:
+            # Lấy 5 phần cuối: tiet_ket_thuc, tiet_bat_dau, thu, ma_lop, ma_mon
+            tiet_ket_thuc = int(parts[-1])
+            tiet_bat_dau = int(parts[-2])
+            thu = int(parts[-3])
+            ma_lop = parts[-4]
+            ma_mon = parts[-5]
+            # Phần còn lại ở đầu là ten_giao_vien
+            ten_giao_vien = "-".join(parts[:-5]).replace("_", " ")  # Khôi phục khoảng trắng
+            
+            for mon_hoc in all_courses.values():
+                for lop in mon_hoc.cac_lop_hoc:
+                    if (lop.ma_mon == ma_mon and 
+                        lop.ma_lop == ma_lop and
+                        lop.ten_giao_vien == ten_giao_vien and
+                        lop.cac_khung_gio and
+                        lop.cac_khung_gio[0].thu == thu and
+                        lop.cac_khung_gio[0].tiet_bat_dau == tiet_bat_dau and
+                        lop.cac_khung_gio[0].tiet_ket_thuc == tiet_ket_thuc):
+                        return lop
+        except (ValueError, IndexError):
+            # Nếu parse lỗi, fallback về format cũ
+            pass
+    
+    # Format cũ: "ma_mon-ma_lop" (tương thích với dữ liệu cũ)
+    # Tìm lớp đầu tiên có ID khớp (có thể có nhiều lớp cùng ID nhưng khác giờ)
+    for mon_hoc in all_courses.values():
+        for lop in mon_hoc.cac_lop_hoc:
+            if lop.get_id() == lop_id:
+                return lop
+    
+    return None
+
+
+def update_bidirectional_constraints(old_lop_id, old_rang_buoc, new_lop_id, new_rang_buoc, all_courses):
+    """
+    Cập nhật ràng buộc 2 chiều: nếu lớp A ràng buộc với lớp B, thì lớp B cũng ràng buộc với lớp A
+    
+    Args:
+        old_lop_id: ID của lớp cũ (khi sửa) hoặc None (khi thêm mới)
+        old_rang_buoc: Danh sách ID các lớp ràng buộc cũ
+        new_lop_id: ID của lớp mới (sau khi sửa hoặc thêm)
+        new_rang_buoc: Danh sách ID các lớp ràng buộc mới
+        all_courses: Dictionary chứa tất cả các môn học
+    """
+    # Tìm lớp hiện tại
+    current_lop = _find_lop_by_id_helper(new_lop_id, all_courses)
+    if not current_lop:
+        return
+    
+    # Xóa ràng buộc cũ (nếu có)
+    if old_lop_id:
+        for old_rang_buoc_id in old_rang_buoc:
+            # Tìm lớp ràng buộc cũ
+            old_rang_buoc_lop = _find_lop_by_id_helper(old_rang_buoc_id, all_courses)
+            if old_rang_buoc_lop and old_lop_id in (old_rang_buoc_lop.lop_rang_buoc or []):
+                # Xóa ràng buộc ngược lại
+                old_rang_buoc_lop.lop_rang_buoc.remove(old_lop_id)
+    
+    # Thêm ràng buộc mới (2 chiều)
+    for new_rang_buoc_id in new_rang_buoc:
+        # Tìm lớp ràng buộc mới
+        new_rang_buoc_lop = _find_lop_by_id_helper(new_rang_buoc_id, all_courses)
+        if new_rang_buoc_lop:
+            # Đảm bảo lớp ràng buộc cũng ràng buộc với lớp hiện tại
+            if not new_rang_buoc_lop.lop_rang_buoc:
+                new_rang_buoc_lop.lop_rang_buoc = []
+            if new_lop_id not in new_rang_buoc_lop.lop_rang_buoc:
+                new_rang_buoc_lop.lop_rang_buoc.append(new_lop_id)
+
+
+def remove_bidirectional_constraints(lop_id, all_courses):
+    """
+    Xóa ràng buộc 2 chiều khi xóa một lớp học
+    
+    Args:
+        lop_id: ID của lớp bị xóa (format: "ma_mon-ma_lop")
+        all_courses: Dictionary chứa tất cả các môn học
+    """
+    if not all_courses:
+        return
+    
+    # Tìm tất cả các lớp có ràng buộc với lớp bị xóa
+    for mon_hoc in all_courses.values():
+        for lop in mon_hoc.cac_lop_hoc:
+            if lop.lop_rang_buoc and lop_id in lop.lop_rang_buoc:
+                # Xóa ràng buộc
+                lop.lop_rang_buoc.remove(lop_id)

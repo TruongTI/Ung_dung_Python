@@ -12,7 +12,7 @@ from PyQt6.QtGui import QFont
 from ..constants import TEN_THU_TRONG_TUAN
 from ..models import LopHoc
 from ..data_handler import save_data
-from ..scheduler import kiem_tra_trung_trong_cung_mon
+from ..scheduler import kiem_tra_trung_trong_cung_mon, remove_bidirectional_constraints, update_bidirectional_constraints
 from .dialogs import ClassDialog
 
 
@@ -211,7 +211,7 @@ class CourseClassesDialog(QDialog):
                 self.mon_hoc.cac_lop_hoc_dict[new_id] = lop
 
             # Cập nhật ràng buộc 2 chiều
-            self._update_bidirectional_constraints(old_id, old_rang_buoc, new_id, new_rang_buoc)
+            update_bidirectional_constraints(old_id, old_rang_buoc, new_id, new_rang_buoc, self.all_courses)
 
             # Lưu và refresh lại giao diện
             save_data(self.all_courses)
@@ -230,11 +230,14 @@ class CourseClassesDialog(QDialog):
             QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
+            # Xóa ràng buộc 2 chiều trước khi xóa lớp
+            lop_id = lop.get_id()
+            remove_bidirectional_constraints(lop_id, self.all_courses)
+            
             # Xóa khỏi danh sách lớp của môn học
             if lop in self.mon_hoc.cac_lop_hoc:
                 self.mon_hoc.cac_lop_hoc.remove(lop)
             # Xóa khỏi dict nếu có
-            lop_id = lop.get_id()
             if lop_id in self.mon_hoc.cac_lop_hoc_dict:
                 del self.mon_hoc.cac_lop_hoc_dict[lop_id]
 
@@ -361,7 +364,7 @@ class CourseClassesDialog(QDialog):
                 # Cập nhật ràng buộc 2 chiều cho lớp mới
                 new_lop_id = new_lop.get_id()
                 new_rang_buoc = data.get('lop_rang_buoc', [])
-                self._update_bidirectional_constraints(None, [], new_lop_id, new_rang_buoc)
+                update_bidirectional_constraints(None, [], new_lop_id, new_rang_buoc, self.all_courses)
                 
                 save_data(self.all_courses)
                 # Refresh lại danh sách
@@ -373,46 +376,4 @@ class CourseClassesDialog(QDialog):
                 QMessageBox.warning(self, "Lỗi", 
                                   "Vui lòng điền đủ thông tin và đảm bảo tiết bắt đầu <= tiết kết thúc.")
     
-    def _update_bidirectional_constraints(self, old_lop_id, old_rang_buoc, new_lop_id, new_rang_buoc):
-        """Cập nhật ràng buộc 2 chiều: nếu lớp A ràng buộc với lớp B, thì lớp B cũng ràng buộc với lớp A"""
-        # Tìm lớp hiện tại
-        current_lop = None
-        for mon_hoc in self.all_courses.values():
-            for lop in mon_hoc.cac_lop_hoc:
-                if lop.get_id() == new_lop_id:
-                    current_lop = lop
-                    break
-            if current_lop:
-                break
-        
-        if not current_lop:
-            return
-        
-        # Xóa ràng buộc cũ (nếu có)
-        if old_lop_id:
-            for old_rang_buoc_id in old_rang_buoc:
-                # Tìm lớp ràng buộc cũ
-                old_rang_buoc_lop = self._find_lop_by_id(old_rang_buoc_id)
-                if old_rang_buoc_lop and old_lop_id in (old_rang_buoc_lop.lop_rang_buoc or []):
-                    # Xóa ràng buộc ngược lại
-                    old_rang_buoc_lop.lop_rang_buoc.remove(old_lop_id)
-        
-        # Thêm ràng buộc mới (2 chiều)
-        for new_rang_buoc_id in new_rang_buoc:
-            # Tìm lớp ràng buộc mới
-            new_rang_buoc_lop = self._find_lop_by_id(new_rang_buoc_id)
-            if new_rang_buoc_lop:
-                # Đảm bảo lớp ràng buộc cũng ràng buộc với lớp hiện tại
-                if not new_rang_buoc_lop.lop_rang_buoc:
-                    new_rang_buoc_lop.lop_rang_buoc = []
-                if new_lop_id not in new_rang_buoc_lop.lop_rang_buoc:
-                    new_rang_buoc_lop.lop_rang_buoc.append(new_lop_id)
-    
-    def _find_lop_by_id(self, lop_id):
-        """Tìm lớp học theo ID (ma_mon-ma_lop)"""
-        for mon_hoc in self.all_courses.values():
-            for lop in mon_hoc.cac_lop_hoc:
-                if lop.get_id() == lop_id:
-                    return lop
-        return None
 

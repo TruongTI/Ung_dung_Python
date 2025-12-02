@@ -176,7 +176,7 @@ class LopHoc:
         self.cac_khung_gio = []
         self.color_hex = color_hex or "#ADD8E6"
         self.loai_lop = loai_lop  # "Lý thuyết", "Bài tập", hoặc "Lớp"
-        self.lop_rang_buoc = lop_rang_buoc or []  # Danh sách ID của các lớp bị ràng buộc (format: "ma_mon-ma_lop")
+        self.lop_rang_buoc = lop_rang_buoc or []  # Danh sách ID của các lớp bị ràng buộc (format: "ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc")
     
     def them_khung_gio(self, thu, tiet_bat_dau, tiet_ket_thuc):
         """Thêm một khung giờ học vào lớp"""
@@ -187,8 +187,23 @@ class LopHoc:
         return f"({self.ma_lop}) {self.ten_giao_vien} - {gio_str}"
     
     def get_id(self):
-        """Trả về ID duy nhất của lớp (ma_mon-ma_lop)"""
-        return f"{self.ma_mon}-{self.ma_lop}"
+        """
+        Trả về ID duy nhất của lớp (ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc)
+        Format: ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc
+        Sử dụng khung giờ đầu tiên nếu có nhiều khung giờ
+        Đặt ten_giao_vien ở đầu để dễ parse (vì tên có thể chứa dấu "-")
+        """
+        if not self.cac_khung_gio:
+            # Nếu chưa có khung giờ, chỉ trả về ma_mon-ma_lop (tương thích với dữ liệu cũ)
+            return f"{self.ma_mon}-{self.ma_lop}"
+        
+        # Lấy khung giờ đầu tiên
+        gio_dau = self.cac_khung_gio[0]
+        # Chuẩn hóa tên giáo viên để tránh ký tự đặc biệt trong ID
+        ten_gv_safe = self.ten_giao_vien.replace(" ", "_").replace("-", "_")
+        # Format: ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc
+        # Đặt ten_giao_vien ở đầu để dễ parse từ phải sang trái
+        return f"{ten_gv_safe}-{self.ma_mon}-{self.ma_lop}-{gio_dau.thu}-{gio_dau.tiet_bat_dau}-{gio_dau.tiet_ket_thuc}"
     
     def to_dict(self):
         return {

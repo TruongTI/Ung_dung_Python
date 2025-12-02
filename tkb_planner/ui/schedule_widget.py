@@ -26,6 +26,7 @@ class ScheduleWidget(QWidget):
         self.TIME_COL_WIDTH = 60
         self.MAX_TIET = 12
         self.schedule_colors = {}
+        self.constrained_classes = set()  # Set các lớp ràng buộc (dùng id() để so sánh)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
 
@@ -208,15 +209,31 @@ class ScheduleWidget(QWidget):
                     rect_height = (khung_gio.tiet_ket_thuc - khung_gio.tiet_bat_dau + 1) * self.CELL_HEIGHT
                     color = QColor(self.schedule_colors.get(lop_hoc.ma_mon, "#ffffff"))
                     painter.setBrush(QBrush(color))
-                    painter.setPen(QPen(border_color, 1))
+                    
+                    # Kiểm tra xem lớp này có ràng buộc không
+                    is_constrained = id(lop_hoc) in self.constrained_classes
+                    if is_constrained:
+                        # Lớp ràng buộc: dùng border dày hơn và màu đặc biệt
+                        constraint_border_color = QColor("#FF6600")  # Màu cam
+                        painter.setPen(QPen(constraint_border_color, 3))  # Border dày hơn
+                    else:
+                        painter.setPen(QPen(border_color, 1))
+                    
                     painter.drawRoundedRect(int(x)+2, int(y)+2, int(rect_width)-4, 
                                           int(rect_height)-4, 5, 5)
                     text_rect = int(x)+5, int(y)+5, int(rect_width)-10, int(rect_height)-10
                     text_rect_x, text_rect_y, text_rect_w, text_rect_h = text_rect
                     
                     # Tính tổng chiều cao của tất cả các phần text trước để căn giữa
+                    # Lấy loại lớp (nếu có)
+                    loai_lop = getattr(lop_hoc, 'loai_lop', 'Lớp')
+                    
                     painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-                    ma_lop_text = f"Lớp: {lop_hoc.ma_lop}"
+                    # Hiển thị loại lớp nếu là Lý thuyết hoặc Bài tập
+                    if loai_lop in ["Lý thuyết", "Bài tập"]:
+                        ma_lop_text = f"[{loai_lop}] {lop_hoc.ma_lop}"
+                    else:
+                        ma_lop_text = f"Lớp: {lop_hoc.ma_lop}"
                     font_metrics = painter.fontMetrics()
                     ma_lop_rect = font_metrics.boundingRect(
                         text_rect_x, text_rect_y, text_rect_w, 0,
@@ -288,6 +305,23 @@ class ScheduleWidget(QWidget):
         self.current_schedule = tkb
         self.busy_times = busy_times or []
         self.schedule_colors.clear()
+        # Tạo set các lớp ràng buộc để hiển thị đặc biệt (dùng object reference)
+        from ..scheduler import _find_lop_by_id_helper
+        self.constrained_classes = set()
+        for lop in tkb:
+            if lop.lop_rang_buoc:
+                # Thêm lớp này vào set (có ràng buộc)
+                self.constrained_classes.add(id(lop))
+                # Thêm các lớp ràng buộc vào set (sử dụng helper để tìm chính xác)
+                for rang_buoc_id in lop.lop_rang_buoc:
+                    # Tìm lớp ràng buộc bằng helper (hỗ trợ cả format cũ và mới)
+                    lop_rang_buoc = _find_lop_by_id_helper(rang_buoc_id, all_courses)
+                    if lop_rang_buoc:
+                        # Tìm lớp này trong TKB (so sánh bằng object reference)
+                        for lop_khac in tkb:
+                            if lop_khac is lop_rang_buoc:
+                                self.constrained_classes.add(id(lop_khac))
+                                break
         for ma_mon, mon_hoc in all_courses.items():
             if mon_hoc.color_hex:
                 self.schedule_colors[ma_mon] = mon_hoc.color_hex
