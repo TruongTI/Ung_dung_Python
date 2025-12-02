@@ -144,7 +144,9 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
         return  # Dừng khi đạt giới hạn
     
     if mon_hoc_index == len(danh_sach_mon_hoc):
-        ket_qua.append(list(lich_hien_tai))
+        # Sử dụng tuple thay vì list để tiết kiệm memory
+        # Tuple nhẹ hơn list và immutable (phù hợp vì TKB không thay đổi sau khi tìm được)
+        ket_qua.append(tuple(lich_hien_tai))
         return
     
     mon_hien_tai = danh_sach_mon_hoc[mon_hoc_index]
@@ -238,9 +240,13 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
     
     Returns:
         Tuple (ket_qua, error_msg, warning_msg): 
-        - ket_qua: Danh sách các TKB hợp lệ (mỗi TKB là list các LopHoc)
+        - ket_qua: Danh sách các TKB hợp lệ (mỗi TKB là tuple các LopHoc - tối ưu memory)
         - error_msg: Thông báo lỗi nếu có (None nếu không có lỗi)
         - warning_msg: Thông báo cảnh báo (ví dụ: đạt giới hạn, timeout)
+        
+    Note:
+        Sử dụng tuple thay vì list để tiết kiệm memory. Tuple nhẹ hơn list và immutable,
+        phù hợp vì TKB không thay đổi sau khi tìm được. Tuple vẫn hỗ trợ iteration và indexing.
     """
     # Sử dụng giá trị mặc định nếu không được chỉ định
     if max_results is None:
