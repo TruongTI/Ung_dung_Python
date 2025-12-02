@@ -289,10 +289,25 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.handle_about)
         help_menu.addAction(about_action)
         
-    def _populate_course_list(self):
-        """Điền danh sách môn học vào UI"""
+    def _populate_course_list(self, restore_checkbox_states=None):
+        """
+        Điền danh sách môn học vào UI
+        
+        Args:
+            restore_checkbox_states: Dictionary chứa trạng thái checkbox cần khôi phục
+                Format: {ma_mon: {'checked': bool, 'mandatory_checked': bool}}
+        """
         # Lưu font gốc để đảm bảo các widget mới có font đúng
         main_font = self.font()
+        
+        # Lưu trạng thái checkbox hiện tại trước khi xóa (nếu không có restore_states)
+        if restore_checkbox_states is None:
+            restore_checkbox_states = {}
+            for ma_mon, widget in self.course_widgets.items():
+                restore_checkbox_states[ma_mon] = {
+                    'checked': widget['check'].isChecked(),
+                    'mandatory_checked': widget['mandatory'].isChecked()
+                }
         
         for widget in self.course_widgets.values():
             widget['container'].deleteLater()
@@ -316,6 +331,9 @@ class MainWindow(QMainWindow):
             if mon_hoc.ma_mon in self.completed_courses:
                 check.setEnabled(False)
                 check.setToolTip("Môn này đã được đánh dấu là đã học")
+            # Khôi phục trạng thái checkbox nếu có
+            if mon_hoc.ma_mon in restore_checkbox_states:
+                check.setChecked(restore_checkbox_states[mon_hoc.ma_mon]['checked'])
             mandatory_check = CustomCheckBox("Bắt buộc")
             mandatory_check.setFont(main_font)  # Đảm bảo checkbox có font đúng
             mandatory_check.setToolTip("TKB tìm được phải chứa môn này")
@@ -323,6 +341,9 @@ class MainWindow(QMainWindow):
             # Disable checkbox bắt buộc cho các môn đã học
             if mon_hoc.ma_mon in self.completed_courses:
                 mandatory_check.setEnabled(False)
+            # Khôi phục trạng thái checkbox bắt buộc nếu có
+            if mon_hoc.ma_mon in restore_checkbox_states:
+                mandatory_check.setChecked(restore_checkbox_states[mon_hoc.ma_mon]['mandatory_checked'])
             
             edit_btn = QPushButton("Sửa")
             edit_btn.setFont(main_font)  # Đảm bảo button có font đúng
@@ -924,6 +945,14 @@ class MainWindow(QMainWindow):
         # Lưu font gốc của main window trước khi mở dialog
         original_main_font = self.font()
         
+        # Lưu trạng thái checkbox của tất cả các môn trước khi mở dialog
+        checkbox_states = {}
+        for ma_mon, widget in self.course_widgets.items():
+            checkbox_states[ma_mon] = {
+                'checked': widget['check'].isChecked(),
+                'mandatory_checked': widget['mandatory'].isChecked()
+            }
+        
         dialog = CourseClassesDialog(mon_hoc, all_courses=self.all_courses, parent=self)
         dialog.exec()  # Luôn refresh sau khi đóng dialog, không cần kiểm tra return value
         
@@ -945,7 +974,11 @@ class MainWindow(QMainWindow):
             self.log_message(f"Đã cập nhật danh sách lớp học của môn {mon_hoc.ma_mon}")
         
         # Luôn refresh lại danh sách môn học để cập nhật số lớp học
-        self._populate_course_list()
+        # Khôi phục trạng thái checkbox của tất cả các môn (trừ môn vừa thêm lớp - bỏ tick)
+        # Bỏ tick môn vừa thêm lớp
+        if mon_hoc.ma_mon in checkbox_states:
+            checkbox_states[mon_hoc.ma_mon]['checked'] = False
+        self._populate_course_list(restore_checkbox_states=checkbox_states)
         # Đảm bảo font không bị thay đổi sau khi populate
         self.setFont(original_main_font)
         if hasattr(self, 'course_list_widget'):
