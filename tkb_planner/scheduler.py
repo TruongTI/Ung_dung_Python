@@ -3,6 +3,7 @@ Logic xử lý tìm kiếm và kiểm tra xung đột thời khóa biểu
 """
 
 import time
+from collections import defaultdict
 from .models import ThoiGianHoc, LichBan, LopHoc
 from .constants import TEN_THU_TRONG_TUAN, MAX_COURSES, MAX_RESULTS, SEARCH_TIMEOUT
 
@@ -13,6 +14,71 @@ def kiem_tra_xung_dot_gio(gio_A, gio_B):
         return False
     return not (gio_A.tiet_ket_thuc < gio_B.tiet_bat_dau or 
                 gio_A.tiet_bat_dau > gio_B.tiet_ket_thuc)
+
+
+def _build_time_index(lop_list):
+    """
+    Tạo index cho thời gian học để lookup nhanh O(1)
+    
+    Args:
+        lop_list: Danh sách các lớp học hoặc lịch bận
+    
+    Returns:
+        Dict: {thu: {tiet: [list of objects]}} - Index theo thứ và tiết
+    """
+    time_index = defaultdict(lambda: defaultdict(list))
+    for item in lop_list:
+        if isinstance(item, LopHoc):
+            for gio in item.cac_khung_gio:
+                for tiet in range(gio.tiet_bat_dau, gio.tiet_ket_thuc + 1):
+                    time_index[gio.thu][tiet].append(item)
+        elif isinstance(item, LichBan):
+            gio_ban = item.to_thoi_gian_hoc()
+            if gio_ban:
+                for tiet in range(gio_ban.tiet_bat_dau, gio_ban.tiet_ket_thuc + 1):
+                    time_index[gio_ban.thu][tiet].append(item)
+    return time_index
+
+
+def _build_gv_index(all_courses, exclude_lop_id=None):
+    """
+    Tạo index cho giáo viên để lookup nhanh O(1)
+    
+    Args:
+        all_courses: Dictionary chứa tất cả các môn học
+        exclude_lop_id: ID của lớp cần loại trừ
+    
+    Returns:
+        Dict: {ten_gv_normalized: [list of LopHoc]}
+    """
+    gv_index = defaultdict(list)
+    for mon_hoc in all_courses.values():
+        for lop in mon_hoc.cac_lop_hoc:
+            if exclude_lop_id and lop.get_id() == exclude_lop_id:
+                continue
+            gv_key = lop.ten_giao_vien.strip().lower()
+            gv_index[gv_key].append(lop)
+    return gv_index
+
+
+def _build_lop_id_index(all_courses):
+    """
+    Tạo index cho lớp học theo ID để lookup nhanh O(1)
+    
+    Args:
+        all_courses: Dictionary chứa tất cả các môn học
+    
+    Returns:
+        Dict: {lop_id: LopHoc} - Index theo ID
+    """
+    lop_id_index = {}
+    for mon_hoc in all_courses.values():
+        for lop in mon_hoc.cac_lop_hoc:
+            lop_id = lop.get_id()
+            # Nếu có nhiều lớp cùng ID, lưu lớp đầu tiên (hoặc có thể lưu list)
+            if lop_id not in lop_id_index:
+                lop_id_index[lop_id] = lop
+    return lop_id_index
 
 
 def check_trung_lich(lop_A, lop_B_or_lich_ban):
@@ -33,13 +99,25 @@ def check_trung_lich(lop_A, lop_B_or_lich_ban):
 
 
 def _kiem_tra_trung_voi_lich(lop_moi, lich_hien_tai, danh_sach_gio_ban):
-    """Kiểm tra xem lớp mới có trùng với lịch hiện tại hoặc giờ bận không"""
-    for lop_da_chon in lich_hien_tai:
-        if check_trung_lich(lop_moi, lop_da_chon):
-            return True
-    for gio_ban in danh_sach_gio_ban:
-        if check_trung_lich(lop_moi, gio_ban):
-            return True
+    """
+    Kiểm tra xem lớp mới có trùng với lịch hiện tại hoặc giờ bận không
+    Tối ưu: Sử dụng time index để giảm độ phức tạp từ O(n²) xuống O(n)
+    """
+    # Tạo index cho lịch hiện tại và giờ bận
+    all_items = list(lich_hien_tai) + list(danh_sach_gio_ban)
+    time_index = _build_time_index(all_items)
+    
+    # Kiểm tra xung đột bằng cách lookup trong index
+    for gio_moi in lop_moi.cac_khung_gio:
+        thu = gio_moi.thu
+        if thu in time_index:
+            # Kiểm tra các tiết trong khung giờ mới
+            for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
+                if tiet in time_index[thu]:
+                    # Có lớp/giờ bận ở cùng thứ và tiết, kiểm tra xung đột chi tiết
+                    for item in time_index[thu][tiet]:
+                        if check_trung_lich(lop_moi, item):
+                            return True
     return False
 
 
@@ -65,9 +143,34 @@ def _tim_lop_rang_buoc(lop_id, all_courses, lop_hien_tai=None):
             return lop_tim_duoc
     
     # Format cũ hoặc không tìm thấy: tìm tất cả lớp cùng ID và ưu tiên
+    # Tối ưu: Tìm trực tiếp trong môn học cụ thể nếu có thể parse được ma_mon
     if not all_courses:
         return None
     
+    # Thử parse ma_mon từ lop_id (format cũ: "ma_mon-ma_lop")
+    parts = lop_id.split("-")
+    if len(parts) >= 2:
+        ma_mon = parts[0]
+        if ma_mon in all_courses:
+            # Tìm trong môn học cụ thể
+            mon_hoc = all_courses[ma_mon]
+            cac_lop_cung_id = [lop for lop in mon_hoc.cac_lop_hoc if lop.get_id() == lop_id]
+            
+            if cac_lop_cung_id:
+                # Nếu chỉ có 1 lớp, trả về lớp đó
+                if len(cac_lop_cung_id) == 1:
+                    return cac_lop_cung_id[0]
+                
+                # Nếu có nhiều lớp cùng ID, ưu tiên lớp không trùng giờ với lop_hien_tai
+                if lop_hien_tai:
+                    for lop in cac_lop_cung_id:
+                        if not check_trung_lich(lop_hien_tai, lop):
+                            return lop  # Trả về lớp không trùng giờ
+                
+                # Nếu không có lớp nào không trùng giờ, trả về lớp đầu tiên
+                return cac_lop_cung_id[0]
+    
+    # Fallback: Duyệt tất cả (cho trường hợp format không chuẩn)
     cac_lop_cung_id = []
     for ma_mon, mon_hoc in all_courses.items():
         for lop in mon_hoc.cac_lop_hoc:
@@ -91,9 +194,15 @@ def _tim_lop_rang_buoc(lop_id, all_courses, lop_hien_tai=None):
     return cac_lop_cung_id[0]
 
 def _them_lop_rang_buoc(lop_hoc, lich_hien_tai, danh_sach_gio_ban, all_courses):
-    """Thêm các lớp ràng buộc vào lịch hiện tại nếu có"""
+    """
+    Thêm các lớp ràng buộc vào lịch hiện tại nếu có
+    Tối ưu: Sử dụng set để kiểm tra nhanh O(1) thay vì O(n)
+    """
     if not lop_hoc.lop_rang_buoc or not all_courses:
         return True  # Không có ràng buộc, OK
+    
+    # Tạo set các object ID đã có trong lịch để lookup nhanh O(1)
+    lich_hien_tai_ids = {id(lop) for lop in lich_hien_tai}
     
     # Kiểm tra và thêm các lớp ràng buộc
     for rang_buoc_id in lop_hoc.lop_rang_buoc:
@@ -102,19 +211,17 @@ def _them_lop_rang_buoc(lop_hoc, lich_hien_tai, danh_sach_gio_ban, all_courses):
         if not lop_rang_buoc:
             continue  # Lớp ràng buộc không tồn tại, bỏ qua
         
-        # Kiểm tra xem lớp ràng buộc đã có trong lịch chưa (so sánh bằng object reference)
-        lop_da_co = False
-        for lop_trong_lich in lich_hien_tai:
-            if lop_trong_lich is lop_rang_buoc:
-                lop_da_co = True
-                break
+        # Kiểm tra xem lớp ràng buộc đã có trong lịch chưa (so sánh bằng object ID) - O(1)
+        if id(lop_rang_buoc) in lich_hien_tai_ids:
+            continue  # Đã có trong lịch, bỏ qua
         
         # Nếu chưa có, kiểm tra xung đột và thêm vào
-        if not lop_da_co:
-            # Kiểm tra xung đột với lịch hiện tại
-            if _kiem_tra_trung_voi_lich(lop_rang_buoc, lich_hien_tai, danh_sach_gio_ban):
-                return False  # Có xung đột, không thể thêm lớp ràng buộc
-            lich_hien_tai.append(lop_rang_buoc)
+        # Kiểm tra xung đột với lịch hiện tại
+        if _kiem_tra_trung_voi_lich(lop_rang_buoc, lich_hien_tai, danh_sach_gio_ban):
+            return False  # Có xung đột, không thể thêm lớp ràng buộc
+        
+        lich_hien_tai.append(lop_rang_buoc)
+        lich_hien_tai_ids.add(id(lop_rang_buoc))  # Cập nhật set
     
     return True  # Đã thêm tất cả lớp ràng buộc thành công
 
@@ -155,12 +262,12 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
         return
     
     # Kiểm tra xem môn học này đã có lớp nào trong lịch chưa (do được thêm như một lớp ràng buộc)
+    # Tối ưu: Sử dụng any() với generator expression thay vì vòng lặp thủ công
     # Nếu có rồi, bỏ qua môn học này và tiếp tục với môn tiếp theo
-    mon_da_co_lop_trong_lich = False
-    for lop_trong_lich in lich_hien_tai:
-        if lop_trong_lich.ma_mon == mon_hien_tai.ma_mon:
-            mon_da_co_lop_trong_lich = True
-            break
+    mon_da_co_lop_trong_lich = any(
+        lop_trong_lich.ma_mon == mon_hien_tai.ma_mon 
+        for lop_trong_lich in lich_hien_tai
+    )
     
     # Nếu môn học đã có lớp trong lịch, bỏ qua và tiếp tục với môn tiếp theo
     if mon_da_co_lop_trong_lich:
@@ -176,6 +283,10 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
         # chỉ cho phép 1 lớp cùng loại trong cùng môn xuất hiện trong TKB (trừ khi có ràng buộc)
         loai_lop = getattr(lop_hoc, 'loai_lop', 'Lớp')
         if loai_lop in ["Lý thuyết", "Bài tập"]:
+            # Tối ưu: Tìm lớp cùng loại trong cùng môn
+            lop_hoc_id = lop_hoc.get_id()
+            lop_rang_buoc_set = set(lop_hoc.lop_rang_buoc) if lop_hoc.lop_rang_buoc else set()
+            
             # Kiểm tra xem đã có lớp cùng loại trong cùng môn chưa
             da_co_lop_cung_loai = False
             for lop_trong_lich in lich_hien_tai:
@@ -183,15 +294,14 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
                     getattr(lop_trong_lich, 'loai_lop', 'Lớp') == loai_lop):
                     # Kiểm tra xem lớp trong lịch có phải là lớp ràng buộc với lớp hiện tại không
                     lop_trong_lich_id = lop_trong_lich.get_id()
-                    lop_hoc_id = lop_hoc.get_id()
-                    # Nếu không có ràng buộc 2 chiều, không cho phép
-                    co_rang_buoc = False
-                    if lop_hoc.lop_rang_buoc and lop_trong_lich_id in lop_hoc.lop_rang_buoc:
-                        co_rang_buoc = True
-                    if lop_trong_lich.lop_rang_buoc and lop_hoc_id in lop_trong_lich.lop_rang_buoc:
-                        co_rang_buoc = True
+                    # Kiểm tra ràng buộc 2 chiều - sử dụng set để lookup O(1) thay vì list
+                    co_rang_buoc = (
+                        lop_trong_lich_id in lop_rang_buoc_set or
+                        (lop_trong_lich.lop_rang_buoc and lop_hoc_id in lop_trong_lich.lop_rang_buoc)
+                    )
                     
                     if not co_rang_buoc:
+                        # Đã có lớp cùng loại và không có ràng buộc
                         da_co_lop_cung_loai = True
                         break
             
@@ -212,17 +322,19 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
             pass
         
         # Xóa lớp học và các lớp ràng buộc đã thêm
-        lich_hien_tai.pop()  # Xóa lớp chính
-        # Xóa các lớp ràng buộc đã thêm (so sánh bằng object reference)
+        lop_chinh = lich_hien_tai.pop()  # Xóa lớp chính
+        
+        # Xóa các lớp ràng buộc đã thêm (tối ưu: xóa từ cuối lên để tránh shift index)
         if lop_hoc.lop_rang_buoc and all_courses:
-            for rang_buoc_id in lop_hoc.lop_rang_buoc:
-                lop_rang_buoc = _tim_lop_rang_buoc(rang_buoc_id, all_courses)
-                if lop_rang_buoc:
-                    # Tìm và xóa bằng object reference
-                    for i in range(len(lich_hien_tai) - 1, -1, -1):
-                        if lich_hien_tai[i] is lop_rang_buoc:
-                            lich_hien_tai.pop(i)
-                            break
+            # Tạo set các ID lớp ràng buộc để tìm nhanh
+            rang_buoc_ids = set(lop_hoc.lop_rang_buoc)
+            # Xóa từ cuối lên để tránh vấn đề với index khi xóa
+            for i in range(len(lich_hien_tai) - 1, -1, -1):
+                lop_trong_lich = lich_hien_tai[i]
+                # Kiểm tra xem lớp này có phải là lớp ràng buộc không
+                lop_id = lop_trong_lich.get_id()
+                if lop_id in rang_buoc_ids:
+                    lich_hien_tai.pop(i)
 
 
 def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, completed_courses=None, all_courses=None, max_results=None, timeout=None):
@@ -306,6 +418,7 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
 def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
     """
     Kiểm tra xem lớp mới có trùng phòng học và trùng giờ với lớp khác không
+    Tối ưu: Sử dụng index để giảm độ phức tạp từ O(n²) xuống O(n)
     
     Args:
         lop_moi: Lớp học mới cần kiểm tra
@@ -317,7 +430,7 @@ def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
         - is_valid: True nếu không trùng, False nếu trùng
         - error_msg: Thông báo lỗi nếu trùng (None nếu không trùng)
     """
-    # Tìm tất cả các lớp có cùng phòng học (ma_lop)
+    # Tìm tất cả các lớp có cùng phòng học (ma_lop) - O(n)
     cac_lop_cung_phong = []
     for mon_hoc in all_courses.values():
         for lop in mon_hoc.cac_lop_hoc:
@@ -331,22 +444,32 @@ def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
     if not cac_lop_cung_phong:
         return True, None
     
-    # Kiểm tra xem có trùng giờ trong cùng 1 ngày không
-    cac_thu_trung = []
-    for lop_cung_phong in cac_lop_cung_phong:
-        for gio_moi in lop_moi.cac_khung_gio:
-            for gio_cu in lop_cung_phong.cac_khung_gio:
-                # Nếu cùng thứ và trùng giờ
-                if gio_moi.thu == gio_cu.thu:
-                    if kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                        ten_thu = TEN_THU_TRONG_TUAN.get(gio_moi.thu, f"Thứ {gio_moi.thu}")
-                        if ten_thu not in cac_thu_trung:
-                            cac_thu_trung.append(ten_thu)
+    # Tạo time index cho các lớp cùng phòng - O(n)
+    time_index = _build_time_index(cac_lop_cung_phong)
+    
+    # Kiểm tra xung đột bằng cách lookup trong index - O(n) thay vì O(n²)
+    cac_thu_trung = set()
+    for gio_moi in lop_moi.cac_khung_gio:
+        thu = gio_moi.thu
+        if thu in time_index:
+            # Kiểm tra các tiết trong khung giờ mới
+            for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
+                if tiet in time_index[thu]:
+                    # Có lớp cùng phòng ở cùng thứ và tiết, kiểm tra xung đột chi tiết
+                    for lop_cung_phong in time_index[thu][tiet]:
+                        # Kiểm tra tất cả khung giờ của lớp cùng phòng
+                        for gio_cu in lop_cung_phong.cac_khung_gio:
+                            if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                                ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
+                                cac_thu_trung.add(ten_thu)
+                                break  # Chỉ cần tìm một xung đột cho mỗi thứ là đủ
+                        if ten_thu in cac_thu_trung:
+                            break
     
     # Nếu có trùng giờ, báo lỗi
     if cac_thu_trung:
         error_msg = (f"Lỗi: Phòng học '{lop_moi.ma_lop}' đã được sử dụng vào "
-                    f"{', '.join(cac_thu_trung)}. "
+                    f"{', '.join(sorted(cac_thu_trung))}. "
                     f"Vui lòng chọn phòng khác hoặc thay đổi thời gian học.")
         return False, error_msg
     
@@ -358,6 +481,7 @@ def kiem_tra_trung_trong_cung_mon(lop_moi, mon_hoc, exclude_lop_id=None):
     """
     Kiểm tra xem lớp mới có trùng phòng học, giáo viên và trùng giờ với lớp khác trong cùng môn không
     (Chỉ kiểm tra trong cùng một môn - dùng khi thêm lớp trong area lớp học)
+    Tối ưu: Sử dụng index để giảm độ phức tạp từ O(n²) xuống O(n)
     
     Args:
         lop_moi: Lớp học mới cần kiểm tra
@@ -369,54 +493,65 @@ def kiem_tra_trung_trong_cung_mon(lop_moi, mon_hoc, exclude_lop_id=None):
         - is_valid: True nếu không trùng, False nếu trùng
         - error_msg: Thông báo lỗi nếu trùng (None nếu không trùng)
     """
-    # Kiểm tra trùng phòng học trong cùng môn
-    cac_lop_cung_phong = []
-    cac_lop_cung_gv = []
+    # Lọc các lớp cần kiểm tra (bỏ qua lớp đang sửa)
+    cac_lop_kiem_tra = [
+        lop for lop in mon_hoc.cac_lop_hoc
+        if not (exclude_lop_id and lop.get_id() == exclude_lop_id)
+    ]
     
-    for lop in mon_hoc.cac_lop_hoc:
-        # Bỏ qua lớp hiện tại nếu đang sửa
-        if exclude_lop_id and lop.get_id() == exclude_lop_id:
-            continue
+    # Tạo index cho phòng học và giáo viên
+    cac_lop_cung_phong = [lop for lop in cac_lop_kiem_tra if lop.ma_lop == lop_moi.ma_lop]
+    gv_key = lop_moi.ten_giao_vien.strip().lower()
+    cac_lop_cung_gv = [lop for lop in cac_lop_kiem_tra 
+                       if lop.ten_giao_vien.strip().lower() == gv_key]
+    
+    # Kiểm tra trùng phòng học và trùng giờ - sử dụng time index
+    if cac_lop_cung_phong:
+        time_index_phong = _build_time_index(cac_lop_cung_phong)
+        cac_thu_trung_phong = set()
         
-        if lop.ma_lop == lop_moi.ma_lop:
-            cac_lop_cung_phong.append(lop)
+        for gio_moi in lop_moi.cac_khung_gio:
+            thu = gio_moi.thu
+            if thu in time_index_phong:
+                for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
+                    if tiet in time_index_phong[thu]:
+                        # Kiểm tra xung đột chi tiết
+                        for lop_cung_phong in time_index_phong[thu][tiet]:
+                            for gio_cu in lop_cung_phong.cac_khung_gio:
+                                if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                                    ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
+                                    cac_thu_trung_phong.add(ten_thu)
+                                    break
         
-        if lop.ten_giao_vien.strip().lower() == lop_moi.ten_giao_vien.strip().lower():
-            cac_lop_cung_gv.append(lop)
+        if cac_thu_trung_phong:
+            error_msg = (f"Lỗi: Phòng học '{lop_moi.ma_lop}' đã được sử dụng trong môn này vào "
+                        f"{', '.join(sorted(cac_thu_trung_phong))}. "
+                        f"Vui lòng chọn phòng khác hoặc thay đổi thời gian học.")
+            return False, error_msg
     
-    # Kiểm tra trùng phòng học và trùng giờ
-    cac_thu_trung_phong = []
-    for lop_cung_phong in cac_lop_cung_phong:
+    # Kiểm tra trùng giáo viên và trùng giờ - sử dụng time index
+    if cac_lop_cung_gv:
+        time_index_gv = _build_time_index(cac_lop_cung_gv)
+        cac_thu_trung_gv = set()
+        
         for gio_moi in lop_moi.cac_khung_gio:
-            for gio_cu in lop_cung_phong.cac_khung_gio:
-                if gio_moi.thu == gio_cu.thu:
-                    if kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                        ten_thu = TEN_THU_TRONG_TUAN.get(gio_moi.thu, f"Thứ {gio_moi.thu}")
-                        if ten_thu not in cac_thu_trung_phong:
-                            cac_thu_trung_phong.append(ten_thu)
-    
-    if cac_thu_trung_phong:
-        error_msg = (f"Lỗi: Phòng học '{lop_moi.ma_lop}' đã được sử dụng trong môn này vào "
-                    f"{', '.join(cac_thu_trung_phong)}. "
-                    f"Vui lòng chọn phòng khác hoặc thay đổi thời gian học.")
-        return False, error_msg
-    
-    # Kiểm tra trùng giáo viên và trùng giờ
-    cac_thu_trung_gv = []
-    for lop_cung_gv in cac_lop_cung_gv:
-        for gio_moi in lop_moi.cac_khung_gio:
-            for gio_cu in lop_cung_gv.cac_khung_gio:
-                if gio_moi.thu == gio_cu.thu:
-                    if kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                        ten_thu = TEN_THU_TRONG_TUAN.get(gio_moi.thu, f"Thứ {gio_moi.thu}")
-                        if ten_thu not in cac_thu_trung_gv:
-                            cac_thu_trung_gv.append(ten_thu)
-    
-    if cac_thu_trung_gv:
-        error_msg = (f"Lỗi: Giáo viên '{lop_moi.ten_giao_vien}' đã có lớp khác trong môn này vào "
-                    f"{', '.join(cac_thu_trung_gv)}. "
-                    f"Một giáo viên không thể dạy nhiều lớp cùng lúc.")
-        return False, error_msg
+            thu = gio_moi.thu
+            if thu in time_index_gv:
+                for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
+                    if tiet in time_index_gv[thu]:
+                        # Kiểm tra xung đột chi tiết
+                        for lop_cung_gv in time_index_gv[thu][tiet]:
+                            for gio_cu in lop_cung_gv.cac_khung_gio:
+                                if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                                    ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
+                                    cac_thu_trung_gv.add(ten_thu)
+                                    break
+        
+        if cac_thu_trung_gv:
+            error_msg = (f"Lỗi: Giáo viên '{lop_moi.ten_giao_vien}' đã có lớp khác trong môn này vào "
+                        f"{', '.join(sorted(cac_thu_trung_gv))}. "
+                        f"Một giáo viên không thể dạy nhiều lớp cùng lúc.")
+            return False, error_msg
     
     return True, None
 
@@ -425,6 +560,7 @@ def kiem_tra_trung_giao_vien(lop_moi, all_courses, exclude_lop_id=None):
     """
     Kiểm tra xem giáo viên của lớp mới có trùng giờ với lớp khác không
     (Một giáo viên không thể dạy nhiều lớp cùng lúc)
+    Tối ưu: Sử dụng GV index để giảm độ phức tạp từ O(n²) xuống O(n)
     
     Args:
         lop_moi: Lớp học mới cần kiểm tra
@@ -436,37 +572,42 @@ def kiem_tra_trung_giao_vien(lop_moi, all_courses, exclude_lop_id=None):
         - is_valid: True nếu không trùng, False nếu trùng
         - error_msg: Thông báo lỗi nếu trùng (None nếu không trùng)
     """
-    # Tìm tất cả các lớp có cùng giáo viên
-    cac_lop_cung_gv = []
-    for mon_hoc in all_courses.values():
-        for lop in mon_hoc.cac_lop_hoc:
-            # Bỏ qua lớp hiện tại nếu đang sửa
-            if exclude_lop_id and lop.get_id() == exclude_lop_id:
-                continue
-            # So sánh tên giáo viên (không phân biệt hoa thường)
-            if lop.ten_giao_vien.strip().lower() == lop_moi.ten_giao_vien.strip().lower():
-                cac_lop_cung_gv.append(lop)
+    # Tạo index cho giáo viên - O(n) một lần
+    gv_index = _build_gv_index(all_courses, exclude_lop_id)
+    
+    # Lookup lớp cùng giáo viên - O(1)
+    gv_key = lop_moi.ten_giao_vien.strip().lower()
+    cac_lop_cung_gv = gv_index.get(gv_key, [])
     
     # Nếu không có lớp nào cùng giáo viên, cho phép thêm
     if not cac_lop_cung_gv:
         return True, None
     
-    # Kiểm tra xem có trùng giờ trong cùng 1 ngày không
-    cac_thu_trung = []
-    for lop_cung_gv in cac_lop_cung_gv:
-        for gio_moi in lop_moi.cac_khung_gio:
-            for gio_cu in lop_cung_gv.cac_khung_gio:
-                # Nếu cùng thứ và trùng giờ
-                if gio_moi.thu == gio_cu.thu:
-                    if kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                        ten_thu = TEN_THU_TRONG_TUAN.get(gio_moi.thu, f"Thứ {gio_moi.thu}")
-                        if ten_thu not in cac_thu_trung:
-                            cac_thu_trung.append(ten_thu)
+    # Tạo time index cho các lớp cùng giáo viên - O(n)
+    time_index = _build_time_index(cac_lop_cung_gv)
+    
+    # Kiểm tra xung đột bằng cách lookup trong index - O(n) thay vì O(n²)
+    cac_thu_trung = set()
+    for gio_moi in lop_moi.cac_khung_gio:
+        thu = gio_moi.thu
+        if thu in time_index:
+            for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
+                if tiet in time_index[thu]:
+                    # Có lớp cùng giáo viên ở cùng thứ và tiết, kiểm tra xung đột chi tiết
+                    for lop_cung_gv in time_index[thu][tiet]:
+                        # Kiểm tra tất cả khung giờ của lớp cùng giáo viên
+                        for gio_cu in lop_cung_gv.cac_khung_gio:
+                            if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                                ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
+                                cac_thu_trung.add(ten_thu)
+                                break  # Chỉ cần tìm một xung đột cho mỗi thứ là đủ
+                        if ten_thu in cac_thu_trung:
+                            break
     
     # Nếu có trùng giờ, báo lỗi
     if cac_thu_trung:
         error_msg = (f"Lỗi: Giáo viên '{lop_moi.ten_giao_vien}' đã có lớp khác vào "
-                    f"{', '.join(cac_thu_trung)}. "
+                    f"{', '.join(sorted(cac_thu_trung))}. "
                     f"Một giáo viên không thể dạy nhiều lớp cùng lúc.")
         return False, error_msg
     
@@ -477,6 +618,7 @@ def kiem_tra_trung_giao_vien(lop_moi, all_courses, exclude_lop_id=None):
 def _find_lop_by_id_helper(lop_id, all_courses):
     """
     Helper function để tìm lớp học theo ID
+    Tối ưu: Tìm trực tiếp trong môn học cụ thể thay vì duyệt tất cả
     
     Args:
         lop_id: ID của lớp 
@@ -509,10 +651,11 @@ def _find_lop_by_id_helper(lop_id, all_courses):
             # Phần còn lại ở đầu là ten_giao_vien
             ten_giao_vien = "-".join(parts[:-5]).replace("_", " ")  # Khôi phục khoảng trắng
             
-            for mon_hoc in all_courses.values():
+            # Tối ưu: Tìm trực tiếp trong môn học cụ thể thay vì duyệt tất cả
+            if ma_mon in all_courses:
+                mon_hoc = all_courses[ma_mon]
                 for lop in mon_hoc.cac_lop_hoc:
-                    if (lop.ma_mon == ma_mon and 
-                        lop.ma_lop == ma_lop and
+                    if (lop.ma_lop == ma_lop and
                         lop.ten_giao_vien == ten_giao_vien and
                         lop.cac_khung_gio and
                         lop.cac_khung_gio[0].thu == thu and
@@ -524,7 +667,17 @@ def _find_lop_by_id_helper(lop_id, all_courses):
             pass
     
     # Format cũ: "ma_mon-ma_lop" (tương thích với dữ liệu cũ)
-    # Tìm lớp đầu tiên có ID khớp (có thể có nhiều lớp cùng ID nhưng khác giờ)
+    # Tối ưu: Tìm trực tiếp trong môn học cụ thể nếu có thể parse được ma_mon
+    if len(parts) >= 2:
+        ma_mon = parts[0]
+        if ma_mon in all_courses:
+            # Tìm trong môn học cụ thể
+            mon_hoc = all_courses[ma_mon]
+            for lop in mon_hoc.cac_lop_hoc:
+                if lop.get_id() == lop_id:
+                    return lop
+    
+    # Fallback: Duyệt tất cả (cho trường hợp format không chuẩn)
     for mon_hoc in all_courses.values():
         for lop in mon_hoc.cac_lop_hoc:
             if lop.get_id() == lop_id:
