@@ -7,6 +7,37 @@ from collections import defaultdict
 from .models import ThoiGianHoc, LichBan, LopHoc
 from .constants import TEN_THU_TRONG_TUAN, MAX_COURSES, MAX_RESULTS, SEARCH_TIMEOUT
 
+# Cache toàn cục cho tra cứu lớp theo ID để tránh duyệt lặp lại all_courses
+_LOP_ID_CACHE = {}
+_LOP_ID_CACHE_SOURCE = None
+
+
+def _get_lop_from_cache(lop_id, all_courses):
+    """
+    Lấy LopHoc từ cache theo ID.
+
+    - Nếu nguồn all_courses thay đổi (object khác), cache sẽ được build lại.
+    - Dùng _build_lop_id_index để có tra cứu O(1) cho các ID chuẩn (lop.get_id()).
+    """
+    global _LOP_ID_CACHE, _LOP_ID_CACHE_SOURCE
+
+    if not all_courses:
+        return None
+
+    # Nếu cache chưa khởi tạo hoặc nguồn dữ liệu đã thay đổi, build lại index
+    if _LOP_ID_CACHE_SOURCE is not all_courses:
+        _LOP_ID_CACHE = _build_lop_id_index(all_courses)
+        _LOP_ID_CACHE_SOURCE = all_courses
+
+    return _LOP_ID_CACHE.get(lop_id)
+
+
+def clear_lop_id_cache():
+    """Xóa cache lớp theo ID (dùng sau khi dữ liệu môn/lớp thay đổi lớn nếu cần)."""
+    global _LOP_ID_CACHE, _LOP_ID_CACHE_SOURCE
+    _LOP_ID_CACHE = {}
+    _LOP_ID_CACHE_SOURCE = None
+
 
 def kiem_tra_xung_dot_gio(gio_A, gio_B):
     """Kiểm tra xem hai khung giờ có xung đột không"""
@@ -132,8 +163,11 @@ def _tim_lop_rang_buoc(lop_id, all_courses, lop_hien_tai=None):
     Returns:
         LopHoc object nếu tìm thấy, None nếu không tìm thấy
     """
-    # Sử dụng helper để tìm lớp (hỗ trợ cả format cũ và mới)
-    lop_tim_duoc = _find_lop_by_id_helper(lop_id, all_courses)
+    # Ưu tiên dùng cache tra cứu theo ID (O(1)) trước
+    lop_tim_duoc = _get_lop_from_cache(lop_id, all_courses)
+    if not lop_tim_duoc:
+        # Fallback: sử dụng helper để tìm lớp (hỗ trợ cả format cũ và mới)
+        lop_tim_duoc = _find_lop_by_id_helper(lop_id, all_courses)
     
     # Nếu tìm thấy và là format mới (có nhiều phần), trả về luôn
     if lop_tim_duoc:
@@ -631,7 +665,13 @@ def _find_lop_by_id_helper(lop_id, all_courses):
     """
     if not all_courses:
         return None
-    
+
+    # Trước tiên thử lookup nhanh trong cache theo ID chuẩn (lop.get_id()).
+    # Điều này xử lý hiệu quả hầu hết các trường hợp ràng buộc sử dụng ID chuẩn.
+    cached_lop = _get_lop_from_cache(lop_id, all_courses)
+    if cached_lop:
+        return cached_lop
+
     # Kiểm tra format ID: nếu có nhiều dấu "-" thì là format mới
     # Format mới: "ten_giao_vien-ma_mon-ma_lop-thu-tiet_bat_dau-tiet_ket_thuc"
     # Tên giáo viên ở đầu, dễ parse từ phải sang trái

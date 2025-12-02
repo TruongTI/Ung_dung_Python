@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QTextBrowser, QStatusBar, QFileDialog, QMessageBox,
     QTimeEdit, QSizePolicy, QComboBox
 )
-from PyQt6.QtCore import Qt, QTime, QSettings
+from PyQt6.QtCore import Qt, QTime, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QAction
 
 from ..models import MonHoc, LopHoc, LichBan
@@ -25,6 +25,49 @@ from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCom
 from .course_classes_dialog import CourseClassesDialog
 from .theme import LIGHT_THEME, DARK_THEME
 from .custom_checkbox import CustomCheckBox
+
+
+class FindTKBThread(QThread):
+    """
+    Thread chạy tìm kiếm TKB ở background để tránh block UI.
+    Phát tín hiệu finished(ket_qua, error_msg, warning_msg) khi hoàn thành.
+    """
+
+    finished = pyqtSignal(list, object, object)
+
+    def __init__(self, selected_courses, busy_times, mandatory_courses,
+                 completed_courses, all_courses, parent=None):
+        super().__init__(parent)
+        self.selected_courses = selected_courses
+        self.busy_times = busy_times
+        self.mandatory_courses = mandatory_courses
+        self.completed_courses = completed_courses
+        self.all_courses = all_courses
+
+    def run(self):
+        try:
+            # Gọi hàm tìm TKB với max_results và timeout mặc định (dùng giá trị trong constants)
+            from ..scheduler import tim_thoi_khoa_bieu
+            result = tim_thoi_khoa_bieu(
+                self.selected_courses,
+                self.busy_times,
+                self.mandatory_courses,
+                self.completed_courses,
+                self.all_courses,
+            )
+
+            # Tương thích với cả version trả về 2 hoặc 3 giá trị
+            if isinstance(result, tuple) and len(result) == 3:
+                ket_qua, error_msg, warning_msg = result
+            elif isinstance(result, tuple) and len(result) == 2:
+                ket_qua, error_msg = result
+                warning_msg = None
+            else:
+                ket_qua, error_msg, warning_msg = [], "Kết quả tìm TKB không hợp lệ.", None
+        except Exception as e:
+            ket_qua, error_msg, warning_msg = [], str(e), None
+
+        self.finished.emit(ket_qua, error_msg, warning_msg)
 
 
 class MainWindow(QMainWindow):
@@ -49,6 +92,8 @@ class MainWindow(QMainWindow):
         self.busy_time_widgets = {}
         self.busy_time_checkboxes = {}  # Lưu checkbox của từng giờ bận
         self.toggle_theme_action = None  # Khởi tạo trước
+        self.find_tkb_thread = None      # Thread tìm TKB đang chạy (nếu có)
+        self._last_active_busy_times = []  # Lưu giờ bận dùng cho lần tìm gần nhất
         # Danh sách môn đã học
         self.completed_courses = load_completed_courses()
         self._setup_ui()
@@ -737,7 +782,15 @@ class MainWindow(QMainWindow):
 
     def handle_find_tkb(self):
         """Tìm kiếm thời khóa biểu hợp lệ"""
-        from PyQt6.QtWidgets import QApplication
+        # Nếu đang có thread tìm kiếm chạy, không cho chạy thêm lần nữa
+        if self.find_tkb_thread is not None and self.find_tkb_thread.isRunning():
+            QMessageBox.information(
+                self,
+                "Đang xử lý",
+                "Hệ thống đang tìm TKB, vui lòng đợi hoàn tất trước khi tìm tiếp.",
+            )
+            return
+
         selected_courses = [
             self.all_courses[ma_mon] 
             for ma_mon, widgets in self.course_widgets.items() 
@@ -765,40 +818,73 @@ class MainWindow(QMainWindow):
         ]
         # Chỉ lấy giờ bận được tích checkbox
         active_busy_times = self._get_active_busy_times()
-        self.log_message("Đang tìm kiếm TKB...")
-        QApplication.processEvents()
-        
-        # Gọi hàm tìm TKB với max_results và timeout mặc định
-        result = tim_thoi_khoa_bieu(
-            selected_courses, active_busy_times, mandatory_courses, 
-            self.completed_courses, self.all_courses
+        self._last_active_busy_times = active_busy_times
+
+        self.log_message("Đang tìm kiếm TKB ở chế độ nền...")
+        self.statusBar().showMessage("Đang tìm TKB, vui lòng đợi...")
+
+        # Disable nút để tránh thao tác lặp trong khi đang tìm
+        self.find_tkb_btn.setEnabled(False)
+        self.prev_tkb_btn.setEnabled(False)
+        self.next_tkb_btn.setEnabled(False)
+        self.save_tkb_btn.setEnabled(False)
+        self.clear_tkb_btn.setEnabled(False)
+
+        # Tạo và chạy thread tìm TKB
+        self.find_tkb_thread = FindTKBThread(
+            selected_courses,
+            active_busy_times,
+            mandatory_courses,
+            self.completed_courses,
+            self.all_courses,
+            parent=self,
         )
-        
-        # Xử lý kết quả (có thể có 2 hoặc 3 giá trị trả về tùy version)
-        if len(result) == 3:
-            self.danh_sach_tkb_tim_duoc, error_msg, warning_msg = result
-        else:
-            # Tương thích với code cũ (2 giá trị)
-            self.danh_sach_tkb_tim_duoc, error_msg = result
-            warning_msg = None
-        
+        self.find_tkb_thread.finished.connect(self.on_tkb_found)
+        self.find_tkb_thread.finished.connect(self.find_tkb_thread.deleteLater)
+        self.find_tkb_thread.start()
+
+    def on_tkb_found(self, ket_qua, error_msg, warning_msg):
+        """
+        Callback khi thread tìm TKB hoàn thành.
+        Cập nhật UI và hiển thị kết quả mà không block giao diện.
+        """
+        # Giải phóng tham chiếu thread
+        self.find_tkb_thread = None
+
+        # Re-enable các nút điều khiển
+        self.find_tkb_btn.setEnabled(True)
+        self.update_nav_buttons()
+
+        active_busy_times = self._last_active_busy_times or self._get_active_busy_times()
+
         if error_msg:
+            self.danh_sach_tkb_tim_duoc = []
+            self.current_tkb_index = -1
             self.log_message(error_msg)
             QMessageBox.warning(self, "Lỗi", error_msg)
             self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
-            self.current_tkb_index = -1
             self.update_tkb_info_label()
-        elif not self.danh_sach_tkb_tim_duoc:
+            self.statusBar().showMessage("Lỗi khi tìm TKB")
+            return
+
+        self.danh_sach_tkb_tim_duoc = ket_qua or []
+
+        if not self.danh_sach_tkb_tim_duoc:
             self.log_message("Không tìm thấy TKB nào phù hợp.")
             self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
             self.current_tkb_index = -1
             self.update_tkb_info_label()
+            self.statusBar().showMessage("Không tìm thấy TKB phù hợp")
         else:
             self.log_message(f"Tìm thấy {len(self.danh_sach_tkb_tim_duoc)} TKB phù hợp!")
             if warning_msg:
                 self.log_message(f"⚠️ {warning_msg}")
                 QMessageBox.information(self, "Thông báo", warning_msg)
             self.show_tkb_at_index(0)
+            self.statusBar().showMessage(
+                f"Đã tìm xong {len(self.danh_sach_tkb_tim_duoc)} TKB phù hợp"
+            )
+
         self.update_nav_buttons()
 
     def show_tkb_at_index(self, index):
