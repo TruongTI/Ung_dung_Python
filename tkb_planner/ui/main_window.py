@@ -192,8 +192,6 @@ class MainWindow(QMainWindow):
         self.next_tkb_btn = QPushButton("TKB Tiếp >")
         self.save_tkb_btn = QPushButton("Lưu TKB")
         self.clear_tkb_btn = QPushButton("Xoá TKB")
-        self.pack_early_btn = QPushButton("Dồn lịch đầu tuần")
-        self.pack_late_btn = QPushButton("Dồn lịch cuối tuần")
 
         button_height = 30
         self.find_tkb_btn.setMinimumHeight(button_height)
@@ -201,8 +199,6 @@ class MainWindow(QMainWindow):
         self.next_tkb_btn.setMinimumHeight(button_height)
         self.save_tkb_btn.setMinimumHeight(button_height)
         self.clear_tkb_btn.setMinimumHeight(button_height)
-        self.pack_early_btn.setMinimumHeight(button_height)
-        self.pack_late_btn.setMinimumHeight(button_height)
 
         button_layout.addWidget(self.find_tkb_btn)
         button_layout.addWidget(self.prev_tkb_btn)
@@ -212,12 +208,6 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.save_tkb_btn)
         button_layout.addWidget(self.clear_tkb_btn)
         right_panel_layout.addLayout(button_layout)
-        
-        # Layout cho 2 nút dồn lịch
-        pack_button_layout = QHBoxLayout()
-        pack_button_layout.addWidget(self.pack_early_btn)
-        pack_button_layout.addWidget(self.pack_late_btn)
-        right_panel_layout.addLayout(pack_button_layout)
         
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Sẵn sàng")
@@ -370,8 +360,6 @@ class MainWindow(QMainWindow):
         self.next_tkb_btn.clicked.connect(self.show_next_tkb)
         self.clear_tkb_btn.clicked.connect(self.handle_clear_tkb)
         self.save_tkb_btn.clicked.connect(self.handle_save_tkb)
-        self.pack_early_btn.clicked.connect(self.handle_pack_early_week)
-        self.pack_late_btn.clicked.connect(self.handle_pack_late_week)
         self.add_subject_btn.clicked.connect(self.handle_add_subject)
         self.search_input.textChanged.connect(self.filter_course_list)
         self.schedule_view.cellClicked.connect(self.handle_cell_click)
@@ -740,8 +728,6 @@ class MainWindow(QMainWindow):
         self.next_tkb_btn.setEnabled(has_results)
         self.save_tkb_btn.setEnabled(has_results)
         self.clear_tkb_btn.setEnabled(has_results)
-        self.pack_early_btn.setEnabled(has_current_tkb)
-        self.pack_late_btn.setEnabled(has_current_tkb)
 
     def handle_clear_tkb(self):
         """Xóa kết quả tìm kiếm TKB"""
@@ -1082,105 +1068,6 @@ class MainWindow(QMainWindow):
             )
         else:
             self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
-
-    def _get_earliest_thu(self, lop):
-        """Lấy thứ sớm nhất trong các khung giờ của lớp học"""
-        if not lop.cac_khung_gio:
-            return None
-        return min(gio.thu for gio in lop.cac_khung_gio)
-    
-    def _pack_schedule(self, pack_to_early=True):
-        """
-        Dồn lịch học vào đầu tuần hoặc cuối tuần
-        
-        Args:
-            pack_to_early: True nếu dồn vào đầu tuần, False nếu dồn vào cuối tuần
-        """
-        if self.current_tkb_index == -1 or not self.danh_sach_tkb_tim_duoc:
-            QMessageBox.warning(self, "Cảnh báo", "Chưa có TKB để dồn lịch.")
-            return
-        
-        tkb = self.danh_sach_tkb_tim_duoc[self.current_tkb_index]
-        active_busy_times = self._get_active_busy_times()
-        
-        # Tạo bản sao của TKB để sửa đổi
-        new_tkb = list(tkb)
-        changed = False
-        
-        # Sắp xếp các lớp học theo thứ hiện tại để xử lý
-        # Đầu tuần: xử lý từ thứ muộn nhất đến sớm nhất (8->2)
-        # Cuối tuần: xử lý từ thứ sớm nhất đến muộn nhất (2->8)
-        # Tạo list với index gốc để có thể thay thế đúng
-        indexed_lops = [(i, lop) for i, lop in enumerate(new_tkb)]
-        sorted_indexed_lops = sorted(indexed_lops, 
-                                     key=lambda x: self._get_earliest_thu(x[1]) or 0, 
-                                     reverse=pack_to_early)
-        
-        for orig_index, current_lop in sorted_indexed_lops:
-            if not current_lop.cac_khung_gio:
-                continue
-            
-            current_thu = self._get_earliest_thu(current_lop)
-            if current_thu is None:
-                continue
-            
-            # Tìm môn học tương ứng
-            mon_hoc = self.all_courses.get(current_lop.ma_mon)
-            if not mon_hoc:
-                continue
-            
-            # Tìm các lớp học khác cùng môn có thể thay thế
-            alternative_lops = []
-            for alt_lop in mon_hoc.cac_lop_hoc:
-                # Bỏ qua lớp hiện tại
-                if alt_lop is current_lop:
-                    continue
-                alt_thu = self._get_earliest_thu(alt_lop)
-                if alt_thu is None:
-                    continue
-                
-                # Kiểm tra xem lớp thay thế có thứ tốt hơn không
-                if pack_to_early:
-                    # Đầu tuần: thứ nhỏ hơn là tốt hơn
-                    if alt_thu < current_thu:
-                        alternative_lops.append((alt_thu, alt_lop))
-                else:
-                    # Cuối tuần: thứ lớn hơn là tốt hơn
-                    if alt_thu > current_thu:
-                        alternative_lops.append((alt_thu, alt_lop))
-            
-            # Sắp xếp các lớp thay thế: đầu tuần (tăng dần) hoặc cuối tuần (giảm dần)
-            alternative_lops.sort(key=lambda x: x[0], reverse=not pack_to_early)
-            
-            # Thử thay thế từng lớp
-            for alt_thu, alt_lop in alternative_lops:
-                # Tạo TKB tạm thời để kiểm tra (thay thế lớp hiện tại)
-                temp_tkb = [lop if lop is not current_lop else alt_lop for lop in new_tkb]
-                
-                # Kiểm tra xung đột
-                if not _kiem_tra_trung_voi_lich(alt_lop, temp_tkb, active_busy_times):
-                    # Không xung đột, thay thế
-                    new_tkb[orig_index] = alt_lop
-                    changed = True
-                    break
-        
-        if changed:
-            # Cập nhật TKB
-            self.danh_sach_tkb_tim_duoc[self.current_tkb_index] = new_tkb
-            self.show_tkb_at_index(self.current_tkb_index)
-            self.log_message(f"Đã dồn lịch vào {'đầu' if pack_to_early else 'cuối'} tuần thành công!")
-        else:
-            QMessageBox.information(self, "Thông báo", 
-                                  f"Không thể dồn lịch vào {'đầu' if pack_to_early else 'cuối'} tuần. "
-                                  "Có thể do xung đột hoặc các lớp học đã ở vị trí tối ưu.")
-    
-    def handle_pack_early_week(self):
-        """Dồn lịch học vào đầu tuần"""
-        self._pack_schedule(pack_to_early=True)
-    
-    def handle_pack_late_week(self):
-        """Dồn lịch học vào cuối tuần"""
-        self._pack_schedule(pack_to_early=False)
 
     def apply_theme(self):
         """Áp dụng theme (sáng hoặc tối) cho ứng dụng"""
