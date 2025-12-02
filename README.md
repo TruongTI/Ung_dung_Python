@@ -54,41 +54,65 @@ py-t4/
 - Python 3.7 trở lên
 - PyQt6 >= 6.0.0
 
-## Cài đặt
+## Cài đặt và Chạy ứng dụng
 
-### 1. Cài đặt Python
+### Yêu cầu hệ thống
 
-Đảm bảo bạn đã cài đặt Python 3.7 trở lên. Kiểm tra bằng lệnh:
+- **Python**: 3.7 trở lên
+- **PyQt6**: >= 6.0.0
+- **Hệ điều hành**: Windows, Linux, hoặc macOS
 
+### Hướng dẫn cài đặt từng bước
+
+#### Bước 1: Kiểm tra Python
+
+Mở terminal/command prompt và kiểm tra phiên bản Python:
+
+**Windows:**
 ```bash
 python --version
 ```
 
-hoặc
-
+**Linux/Mac:**
 ```bash
 python3 --version
 ```
 
-### 2. Tạo Virtual Environment (Khuyến nghị)
+Nếu chưa cài đặt Python, tải về từ [python.org](https://www.python.org/downloads/)
 
-Virtual environment giúp tránh xung đột với các package khác và giải quyết vấn đề đường dẫn dài trên Windows:
+#### Bước 2: Clone hoặc tải dự án
 
-**Trên Windows:**
+Nếu bạn đã có thư mục `py-t4`, chuyển vào thư mục đó:
+
 ```bash
 cd py-t4
+```
+
+#### Bước 3: Tạo Virtual Environment (Khuyến nghị)
+
+Virtual environment giúp tránh xung đột với các package khác và giải quyết vấn đề đường dẫn dài trên Windows.
+
+**Trên Windows (PowerShell):**
+```bash
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
+**Trên Windows (Command Prompt):**
+```bash
+python -m venv venv
+venv\Scripts\activate.bat
+```
+
 **Trên Linux/Mac:**
 ```bash
-cd py-t4
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Cài đặt dependencies
+Sau khi kích hoạt, bạn sẽ thấy `(venv)` ở đầu dòng lệnh.
+
+#### Bước 4: Cài đặt dependencies
 
 Sau khi kích hoạt virtual environment, cài đặt các thư viện cần thiết:
 
@@ -96,20 +120,23 @@ Sau khi kích hoạt virtual environment, cài đặt các thư viện cần thi
 pip install -r requirements.txt
 ```
 
-hoặc cài đặt PyQt6 trực tiếp:
+Hoặc cài đặt trực tiếp:
 
 ```bash
-pip install PyQt6
+pip install PyQt6>=6.0.0
 ```
 
-**Lưu ý:** Nếu gặp lỗi đường dẫn dài trên Windows khi cài đặt trực tiếp (không dùng venv), hãy sử dụng virtual environment như hướng dẫn trên.
+**Lưu ý:** 
+- Nếu gặp lỗi đường dẫn dài trên Windows, hãy sử dụng virtual environment
+- Nếu gặp lỗi quyền truy cập, thử thêm `--user` vào cuối lệnh pip
 
-## Cách chạy
+### Cách chạy ứng dụng
 
-**Quan trọng:** Đảm bảo bạn đã kích hoạt virtual environment trước khi chạy ứng dụng.
+#### Chạy cơ bản
 
-### Trên Windows
+**Quan trọng:** Đảm bảo bạn đã kích hoạt virtual environment trước khi chạy.
 
+**Trên Windows:**
 ```bash
 # Kích hoạt virtual environment (nếu chưa kích hoạt)
 .\venv\Scripts\Activate.ps1
@@ -118,8 +145,7 @@ pip install PyQt6
 python main.py
 ```
 
-### Trên Linux/Mac
-
+**Trên Linux/Mac:**
 ```bash
 # Kích hoạt virtual environment (nếu chưa kích hoạt)
 source venv/bin/activate
@@ -128,15 +154,38 @@ source venv/bin/activate
 python3 main.py
 ```
 
-**Lưu ý:** Nếu bạn không sử dụng virtual environment, có thể chạy trực tiếp `python main.py` hoặc `python3 main.py`, nhưng cần đảm bảo PyQt6 đã được cài đặt trong môi trường Python của bạn.
+#### Chạy không dùng Virtual Environment
 
-### Chạy với auto-reload (Development)
+Nếu không sử dụng virtual environment, đảm bảo PyQt6 đã được cài đặt:
 
 ```bash
-# Cài đặt watchdog để có thể xem dự án động luôn
+# Windows
+python main.py
+
+# Linux/Mac
+python3 main.py
+```
+
+#### Chạy với auto-reload (Dành cho phát triển)
+
+Để tự động reload khi có thay đổi code:
+
+```bash
+# Cài đặt watchdog (nếu chưa có)
 pip install watchdog
+
+# Chạy với auto-reload
 watchmedo auto-restart --patterns="*.py" --recursive -- python main.py
 ```
+
+### Quick Start
+
+1. **Khởi động ứng dụng**: Chạy `python main.py` (hoặc `python3 main.py`)
+2. **Thêm môn học**: Click nút "Thêm Môn" hoặc menu `Edit > Thêm Môn học`
+3. **Thêm lớp học**: Click menu `Edit > Thêm Lớp học` hoặc click vào ô trống trên lịch
+4. **Chọn môn học**: Tick vào checkbox bên cạnh tên môn
+5. **Tìm TKB**: Click nút "Tìm TKB hợp lệ"
+6. **Xem kết quả**: Sử dụng nút "< TKB Trước" và "TKB Tiếp >" để xem các TKB tìm được
 
 ## Hướng dẫn sử dụng
 
