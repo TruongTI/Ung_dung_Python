@@ -41,3 +41,8 @@ data_TKB_pro.json
 .DS_Store
 Thumbs.db
 
+# Documentation / Reports (internal)
+OPTIMIZATION_REPORT.md
+
+
+
