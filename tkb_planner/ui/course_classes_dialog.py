@@ -28,15 +28,10 @@ class CourseClassesDialog(QDialog):
         self.deleted_classes = []  # Lưu các lớp đã xóa
         self.edited_classes = {}  # Lưu các lớp đã chỉnh sửa
         
-        # Lưu font gốc của parent (nếu có) để khôi phục sau
-        self.parent_original_font = None
-        if parent:
-            self.parent_original_font = parent.font()
-        
-        # Lưu font gốc của dialog để đảm bảo không bị thay đổi
+        # Lưu font gốc để đảm bảo không bị thay đổi
         self.original_font = self.font()
         # Đảm bảo font size tối thiểu là 10
-        if self.original_font.pointSize() < 10 or self.original_font.pointSize() == -1:
+        if self.original_font.pointSize() < 10:
             self.original_font.setPointSize(10)
         self.setFont(self.original_font)
         

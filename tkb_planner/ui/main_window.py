@@ -301,22 +301,17 @@ class MainWindow(QMainWindow):
         
     def _populate_course_list(self):
         """Điền danh sách môn học vào UI"""
-        # Lưu font gốc để đảm bảo các widget mới có font đúng
-        main_font = self.font()
-        
         for widget in self.course_widgets.values():
             widget['container'].deleteLater()
         self.course_widgets.clear()
         sorted_courses = sorted(self.all_courses.values(), key=lambda m: m.ma_mon)
         for mon_hoc in sorted_courses:
             container = QWidget()
-            container.setFont(main_font)  # Đảm bảo container có font đúng
             layout = QHBoxLayout(container)
             layout.setContentsMargins(5, 3, 5, 3)  # Thêm margin để tránh bị che
             layout.setSpacing(5)  # Thêm khoảng cách giữa các widget
             
             check = CustomCheckBox(f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
-            check.setFont(main_font)  # Đảm bảo checkbox có font đúng
             check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             # Cho phép click vào text mà không toggle checkbox
             check.set_allow_text_click(True)
@@ -327,7 +322,6 @@ class MainWindow(QMainWindow):
                 check.setEnabled(False)
                 check.setToolTip("Môn này đã được đánh dấu là đã học")
             mandatory_check = CustomCheckBox("Bắt buộc")
-            mandatory_check.setFont(main_font)  # Đảm bảo checkbox có font đúng
             mandatory_check.setToolTip("TKB tìm được phải chứa môn này")
             mandatory_check.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
             # Disable checkbox bắt buộc cho các môn đã học
@@ -335,13 +329,11 @@ class MainWindow(QMainWindow):
                 mandatory_check.setEnabled(False)
             
             edit_btn = QPushButton("Sửa")
-            edit_btn.setFont(main_font)  # Đảm bảo button có font đúng
             edit_btn.setMinimumWidth(55)  # Thay vì setFixedWidth để có thể co giãn
             edit_btn.setMaximumWidth(70)
             edit_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
             
             delete_btn = QPushButton("Xoá")
-            delete_btn.setFont(main_font)  # Đảm bảo button có font đúng
             delete_btn.setMinimumWidth(55)
             delete_btn.setMaximumWidth(70)
             delete_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
@@ -592,7 +584,7 @@ class MainWindow(QMainWindow):
             layout.setSpacing(5)
             
             check = CustomCheckBox(str(busy_time))
-            check.setChecked(False)  # Mặc định không tích
+            check.setChecked(True)  # Mặc định tích
             check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             check.toggled.connect(lambda: self._update_schedule_display())  # Cập nhật khi toggle
             
@@ -631,7 +623,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(5)  # Thêm khoảng cách giữa các widget
         
         check = CustomCheckBox(str(new_busy_time))
-        check.setChecked(False)  # Mặc định không tích
+        check.setChecked(True)
         check.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         check.toggled.connect(lambda: self._update_schedule_display())  # Cập nhật khi toggle
         
@@ -935,18 +927,8 @@ class MainWindow(QMainWindow):
 
     def handle_show_course_classes(self, mon_hoc):
         """Hiển thị dialog các lớp học của môn học"""
-        # Lưu font gốc của main window trước khi mở dialog
-        original_main_font = self.font()
-        
         dialog = CourseClassesDialog(mon_hoc, all_courses=self.all_courses, parent=self)
         dialog.exec()  # Luôn refresh sau khi đóng dialog, không cần kiểm tra return value
-        
-        # Khôi phục font gốc của main window sau khi dialog đóng
-        self.setFont(original_main_font)
-        # Đảm bảo widget chứa danh sách môn học cũng có font đúng
-        if hasattr(self, 'course_list_widget'):
-            self.course_list_widget.setFont(original_main_font)
-        
         # Xử lý các lớp đã xóa (nếu có)
         deleted_classes = dialog.get_deleted_classes()
         if deleted_classes:
@@ -960,15 +942,6 @@ class MainWindow(QMainWindow):
         
         # Luôn refresh lại danh sách môn học để cập nhật số lớp học
         self._populate_course_list()
-        # Đảm bảo font không bị thay đổi sau khi populate
-        self.setFont(original_main_font)
-        if hasattr(self, 'course_list_widget'):
-            self.course_list_widget.setFont(original_main_font)
-        
-        # Force update layout để đảm bảo kích thước đúng
-        self.course_list_widget.updateGeometry()
-        self.course_list_layout.update()
-        
         # Cập nhật lại schedule nếu đang hiển thị
         active_busy_times = self._get_active_busy_times()
         if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
