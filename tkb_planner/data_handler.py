@@ -4,12 +4,15 @@ Xử lý lưu và tải dữ liệu từ file JSON
 
 import json
 import os
+import logging
 from PyQt6.QtWidgets import QMessageBox
 
 from PyQt6.QtCore import QTime
 
 from .constants import DATA_FILE, COMPLETED_COURSES_FILE, BUSY_TIMES_FILE
 from .models import MonHoc, LopHoc, ThoiGianHoc, LichBan
+
+logger = logging.getLogger(__name__)
 
 
 def save_data(all_courses_dict):
@@ -29,6 +32,7 @@ def save_data(all_courses_dict):
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)
         return True
     except Exception as e:
+        logger.error("Không thể lưu dữ liệu môn học", exc_info=True)
         QMessageBox.critical(None, "Lỗi Lưu", f"Không thể lưu dữ liệu: {e}")
         return False
 
@@ -75,6 +79,7 @@ def load_data():
             loaded_courses[ma_mon] = mon_hoc
         return loaded_courses
     except Exception as e:
+        logger.error("Không thể đọc file dữ liệu môn học", exc_info=True)
         QMessageBox.critical(None, "Lỗi Tải", f"Không thể đọc file dữ liệu: {e}")
         return {}
 
@@ -89,6 +94,7 @@ def create_sample_data_if_not_exists():
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump({}, f, ensure_ascii=False, indent=4)
     except Exception as e:
+        logger.error("Không thể tạo file dữ liệu ban đầu", exc_info=True)
         QMessageBox.critical(None, "Lỗi Tạo File", f"Không thể tạo file dữ liệu: {e}")
 
 
@@ -107,6 +113,7 @@ def save_completed_courses(completed_courses_list):
             json.dump(completed_courses_list, f, ensure_ascii=False, indent=4)
         return True
     except Exception as e:
+        logger.error("Không thể lưu danh sách môn đã học", exc_info=True)
         QMessageBox.critical(None, "Lỗi Lưu", f"Không thể lưu danh sách môn đã học: {e}")
         return False
 
@@ -129,6 +136,7 @@ def load_completed_courses():
             return data
         return []
     except Exception as e:
+        logger.error("Không thể đọc file môn đã học", exc_info=True)
         QMessageBox.critical(None, "Lỗi Tải", f"Không thể đọc file môn đã học: {e}")
         return []
 
@@ -157,6 +165,7 @@ def save_busy_times(busy_times_list):
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)
         return True
     except Exception as e:
+        logger.error("Không thể lưu danh sách giờ bận", exc_info=True)
         QMessageBox.critical(None, "Lỗi Lưu", f"Không thể lưu danh sách giờ bận: {e}")
         return False
 
@@ -193,6 +202,7 @@ def load_busy_times():
             busy_times.append(busy_time)
         return busy_times
     except Exception as e:
+        logger.error("Không thể đọc file giờ bận", exc_info=True)
         QMessageBox.critical(None, "Lỗi Tải", f"Không thể đọc file giờ bận: {e}")
         return []
 

@@ -3,6 +3,7 @@ Các class model đại diện cho dữ liệu trong hệ thống
 """
 
 from .constants import MIN_THU, MAX_THU, MIN_TIET, MAX_TIET
+from .errors import ValidationError
 
 
 def chuan_hoa_ma_lop(ma_lop):
@@ -46,19 +47,19 @@ class ThoiGianHoc:
 
         # Validate thứ
         if not (MIN_THU <= thu <= MAX_THU):
-            raise ValueError(f"Thứ phải từ {MIN_THU}-{MAX_THU}, nhận được: {thu}")
+            raise ValidationError(f"Thứ phải từ {MIN_THU}-{MAX_THU}, nhận được: {thu}")
 
         # Validate tiết bắt đầu/kết thúc
         if not (MIN_TIET <= tiet_bat_dau <= MAX_TIET):
-            raise ValueError(
+            raise ValidationError(
                 f"Tiết bắt đầu phải từ {MIN_TIET}-{MAX_TIET}, nhận được: {tiet_bat_dau}"
             )
         if not (MIN_TIET <= tiet_ket_thuc <= MAX_TIET):
-            raise ValueError(
+            raise ValidationError(
                 f"Tiết kết thúc phải từ {MIN_TIET}-{MAX_TIET}, nhận được: {tiet_ket_thuc}"
             )
         if tiet_bat_dau > tiet_ket_thuc:
-            raise ValueError("Tiết bắt đầu phải <= tiết kết thúc")
+            raise ValidationError("Tiết bắt đầu phải <= tiết kết thúc")
 
         self.thu = thu
         self.tiet_bat_dau = tiet_bat_dau
