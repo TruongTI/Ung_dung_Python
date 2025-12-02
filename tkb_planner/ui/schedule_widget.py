@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt, QDate, pyqtSignal, QRect
 from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPen, QFontMetrics
 from PyQt6.QtWidgets import QSizePolicy
 
-from ..constants import TEN_THU_TRONG_TUAN
+from ..constants import TEN_THU_TRONG_TUAN, MAX_TIET
 
 
 class ScheduleWidget(QWidget):
@@ -24,7 +24,8 @@ class ScheduleWidget(QWidget):
         self.CELL_HEIGHT = 50
         self.HEADER_HEIGHT = 60
         self.TIME_COL_WIDTH = 60
-        self.MAX_TIET = 12
+        # Sử dụng hằng số chung cho số tiết tối đa trong ngày
+        self.MAX_TIET = MAX_TIET
         self.schedule_colors = {}
         self.constrained_classes = set()  # Set các lớp ràng buộc (dùng id() để so sánh)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)

@@ -1,0 +1,350 @@
+{
+    "CS321": {
+        "ma_mon": "CS321",
+        "ten_mon": "Tiền xử lý dữ liệu",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "A704",
+                "ten_giao_vien": "Tưởng Văn Đạt",
+                "ma_mon": "CS321",
+                "ten_mon": "Tiền xử lý dữ liệu",
+                "cac_khung_gio": [
+                    {
+                        "thu": 2,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 3
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A705",
+                "ten_giao_vien": "Tưởng Văn Đạt",
+                "ma_mon": "CS321",
+                "ten_mon": "Tiền xử lý dữ liệu",
+                "cac_khung_gio": [
+                    {
+                        "thu": 2,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "IS332": {
+        "ma_mon": "IS332",
+        "ten_mon": "Phân tích thiết kế hướng đối tượng",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "B705",
+                "ten_giao_vien": "Nguyễn Thị Nhung",
+                "ma_mon": "IS332",
+                "ten_mon": "Phân tích thiết kế hướng đối tượng",
+                "cac_khung_gio": [
+                    {
+                        "thu": 3,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 3
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "B705",
+                "ten_giao_vien": "Nguyễn Thị Nhung",
+                "ma_mon": "IS332",
+                "ten_mon": "Phân tích thiết kế hướng đối tượng",
+                "cac_khung_gio": [
+                    {
+                        "thu": 4,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "IT320": {
+        "ma_mon": "IT320",
+        "ten_mon": "Phát triển ứng dụng với Python",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "A702",
+                "ten_giao_vien": "Ngô Mạnh Cường",
+                "ma_mon": "IT320",
+                "ten_mon": "Phát triển ứng dụng với Python",
+                "cac_khung_gio": [
+                    {
+                        "thu": 4,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 3
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A701",
+                "ten_giao_vien": "Ngô Mạnh Cường",
+                "ma_mon": "IT320",
+                "ten_mon": "Phát triển ứng dụng với Python",
+                "cac_khung_gio": [
+                    {
+                        "thu": 4,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "IS330": {
+        "ma_mon": "IS330",
+        "ten_mon": "Dữ liệu lớn",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "A702",
+                "ten_giao_vien": "Nguyễn Quang Huy",
+                "ma_mon": "IS330",
+                "ten_mon": "Dữ liệu lớn",
+                "cac_khung_gio": [
+                    {
+                        "thu": 3,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A704",
+                "ten_giao_vien": "Nguyễn Quang Huy",
+                "ma_mon": "IS330",
+                "ten_mon": "Dữ liệu lớn",
+                "cac_khung_gio": [
+                    {
+                        "thu": 4,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "CS223": {
+        "ma_mon": "CS223",
+        "ten_mon": "Lập trình Java",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "A709",
+                "ten_giao_vien": "Nguyễn Quốc Việt",
+                "ma_mon": "CS223",
+                "ten_mon": "Lập trình Java",
+                "cac_khung_gio": [
+                    {
+                        "thu": 5,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A708",
+                "ten_giao_vien": "Nguyễn Quốc Việt",
+                "ma_mon": "CS223",
+                "ten_mon": "Lập trình Java",
+                "cac_khung_gio": [
+                    {
+                        "thu": 4,
+                        "tiet_bat_dau": 4,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A704",
+                "ten_giao_vien": "Nguyễn Quốc Việt",
+                "ma_mon": "CS223",
+                "ten_mon": "Lập trình Java",
+                "cac_khung_gio": [
+                    {
+                        "thu": 3,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 3
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "MA111": {
+        "ma_mon": "MA111",
+        "ten_mon": "Giải tích 2",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "A509",
+                "ten_giao_vien": "Nguyễn Quốc Tuấn",
+                "ma_mon": "MA111",
+                "ten_mon": "Giải tích 2",
+                "cac_khung_gio": [
+                    {
+                        "thu": 5,
+                        "tiet_bat_dau": 9,
+                        "tiet_ket_thuc": 10
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lý thuyết",
+                "lop_rang_buoc": [
+                    "Nguyễn_Quốc_Tuấn-MA111-A509-7-5-6"
+                ]
+            },
+            {
+                "ma_lop": "A509",
+                "ten_giao_vien": "Nguyễn Quốc Tuấn",
+                "ma_mon": "MA111",
+                "ten_mon": "Giải tích 2",
+                "cac_khung_gio": [
+                    {
+                        "thu": 5,
+                        "tiet_bat_dau": 5,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lý thuyết",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A509",
+                "ten_giao_vien": "Nguyễn Quốc Tuấn",
+                "ma_mon": "MA111",
+                "ten_mon": "Giải tích 2",
+                "cac_khung_gio": [
+                    {
+                        "thu": 7,
+                        "tiet_bat_dau": 5,
+                        "tiet_ket_thuc": 6
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Bài tập",
+                "lop_rang_buoc": [
+                    "Nguyễn_Quốc_Tuấn-MA111-A509-5-9-10"
+                ]
+            },
+            {
+                "ma_lop": "A509",
+                "ten_giao_vien": "Nguyễn Quốc Tuấn",
+                "ma_mon": "MA111",
+                "ten_mon": "Giải tích 2",
+                "cac_khung_gio": [
+                    {
+                        "thu": 7,
+                        "tiet_bat_dau": 9,
+                        "tiet_ket_thuc": 10
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Bài tập",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "CS315": {
+        "ma_mon": "CS315",
+        "ten_mon": "Nguyên lý hệ điều hành",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "A704",
+                "ten_giao_vien": "Đào Viết Phương",
+                "ma_mon": "CS315",
+                "ten_mon": "Nguyên lý hệ điều hành",
+                "cac_khung_gio": [
+                    {
+                        "thu": 6,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 3
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A705",
+                "ten_giao_vien": "Đào Viết Phương",
+                "ma_mon": "CS315",
+                "ten_mon": "Nguyên lý hệ điều hành",
+                "cac_khung_gio": [
+                    {
+                        "thu": 3,
+                        "tiet_bat_dau": 3,
+                        "tiet_ket_thuc": 5
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            },
+            {
+                "ma_lop": "A704",
+                "ten_giao_vien": "Hải",
+                "ma_mon": "CS315",
+                "ten_mon": "Nguyên lý hệ điều hành",
+                "cac_khung_gio": [
+                    {
+                        "thu": 3,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 3
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lớp",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    }
+}

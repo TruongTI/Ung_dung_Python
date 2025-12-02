@@ -4,6 +4,7 @@ Xử lý lưu và tải dữ liệu từ file JSON
 
 import json
 import os
+import shutil
 import logging
 from PyQt6.QtWidgets import QMessageBox
 
@@ -13,6 +14,32 @@ from .constants import DATA_FILE, COMPLETED_COURSES_FILE, BUSY_TIMES_FILE
 from .models import MonHoc, LopHoc, ThoiGianHoc, LichBan
 
 logger = logging.getLogger(__name__)
+
+
+def _atomic_write_json(target_path, data_obj):
+    """
+    Ghi dữ liệu JSON một cách an toàn:
+    - Ghi vào file tạm (*.tmp)
+    - Backup file cũ (nếu có) thành *.bak
+    - Đổi tên file tạm thành file chính
+    """
+    temp_file = target_path + ".tmp"
+    backup_file = target_path + ".bak"
+
+    # 1. Ghi vào file tạm
+    with open(temp_file, "w", encoding="utf-8") as f:
+        json.dump(data_obj, f, ensure_ascii=False, indent=4)
+
+    # 2. Backup file cũ nếu tồn tại
+    if os.path.exists(target_path):
+        try:
+            shutil.copy2(target_path, backup_file)
+        except Exception:
+            # Không chặn việc lưu nếu backup lỗi, chỉ log lại
+            logger.warning("Không thể backup file %s", target_path, exc_info=True)
+
+    # 3. Đổi tên file tạm thành file chính (gần như atomic trên hầu hết hệ thống)
+    os.replace(temp_file, target_path)
 
 
 def save_data(all_courses_dict):
@@ -26,10 +53,10 @@ def save_data(all_courses_dict):
         True nếu lưu thành công, False nếu có lỗi
     """
     try:
-        data_to_save = {ma_mon: mon_hoc.to_dict() 
-                       for ma_mon, mon_hoc in all_courses_dict.items()}
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+        data_to_save = {
+            ma_mon: mon_hoc.to_dict() for ma_mon, mon_hoc in all_courses_dict.items()
+        }
+        _atomic_write_json(DATA_FILE, data_to_save)
         return True
     except Exception as e:
         logger.error("Không thể lưu dữ liệu môn học", exc_info=True)
@@ -109,8 +136,7 @@ def save_completed_courses(completed_courses_list):
         True nếu lưu thành công, False nếu có lỗi
     """
     try:
-        with open(COMPLETED_COURSES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(completed_courses_list, f, ensure_ascii=False, indent=4)
+        _atomic_write_json(COMPLETED_COURSES_FILE, completed_courses_list)
         return True
     except Exception as e:
         logger.error("Không thể lưu danh sách môn đã học", exc_info=True)
@@ -154,15 +180,16 @@ def save_busy_times(busy_times_list):
     try:
         data_to_save = []
         for busy_time in busy_times_list:
-            data_to_save.append({
-                'thu': busy_time.thu,
-                'gio_bat_dau': busy_time.gio_bat_dau.toString('HH:mm'),
-                'gio_ket_thuc': busy_time.gio_ket_thuc.toString('HH:mm'),
-                'ly_do': busy_time.ly_do,
-                'id': busy_time.id
-            })
-        with open(BUSY_TIMES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+            data_to_save.append(
+                {
+                    "thu": busy_time.thu,
+                    "gio_bat_dau": busy_time.gio_bat_dau.toString("HH:mm"),
+                    "gio_ket_thuc": busy_time.gio_ket_thuc.toString("HH:mm"),
+                    "ly_do": busy_time.ly_do,
+                    "id": busy_time.id,
+                }
+            )
+        _atomic_write_json(BUSY_TIMES_FILE, data_to_save)
         return True
     except Exception as e:
         logger.error("Không thể lưu danh sách giờ bận", exc_info=True)
