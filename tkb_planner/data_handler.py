@@ -62,7 +62,8 @@ def load_data():
                     lop_data['ma_mon'], 
                     lop_data['ten_mon'], 
                     lop_data.get('color_hex'),
-                    lop_data.get('loai_lop', 'Lớp')  # Mặc định là "Lớp" nếu không có
+                    lop_data.get('loai_lop', 'Lớp'),  # Mặc định là "Lớp" nếu không có
+                    lop_data.get('lop_rang_buoc', [])  # Danh sách lớp ràng buộc
                 )
                 for gio_data in lop_data.get('cac_khung_gio', []):
                     lop_hoc.them_khung_gio(

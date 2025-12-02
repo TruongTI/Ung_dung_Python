@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QGroupBox, QMessageBox, QDialogButtonBox
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 from ..constants import TEN_THU_TRONG_TUAN
 from ..models import LopHoc
@@ -26,6 +27,13 @@ class CourseClassesDialog(QDialog):
         self.all_courses = all_courses or {mon_hoc.ma_mon: mon_hoc}
         self.deleted_classes = []  # Lưu các lớp đã xóa
         self.edited_classes = {}  # Lưu các lớp đã chỉnh sửa
+        
+        # Lưu font gốc để đảm bảo không bị thay đổi
+        self.original_font = self.font()
+        # Đảm bảo font size tối thiểu là 10
+        if self.original_font.pointSize() < 10:
+            self.original_font.setPointSize(10)
+        self.setFont(self.original_font)
         
         layout = QVBoxLayout(self)
         
@@ -61,22 +69,31 @@ class CourseClassesDialog(QDialog):
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(10, 0, 0, 0)
         
+        # Đảm bảo font size không bị nhỏ hơn
+        default_font = self.original_font
+        if default_font.pointSize() < 10:
+            default_font = QFont(default_font)
+            default_font.setPointSize(10)
+        
         # Label mã lớp (chỉ hiển thị ở dòng đầu tiên)
         if is_first_row:
             ma_lop_label = QLabel(lop.ma_lop)
         else:
             ma_lop_label = QLabel("")
+        ma_lop_label.setFont(default_font)
         ma_lop_label.setStyleSheet("padding-left: 0px;")
         layout.addWidget(ma_lop_label)
         
         # Label giờ học (hiển thị dạng "Tiết X-Y")
         gio_label = QLabel(f"Tiết {gio.tiet_bat_dau}-{gio.tiet_ket_thuc}")
+        gio_label.setFont(default_font)
         gio_label.setStyleSheet("padding-left: 0px;")
         layout.addWidget(gio_label)
         
         # Label thứ
         ten_thu = TEN_THU_TRONG_TUAN.get(gio.thu, f"Thứ {gio.thu}")
         thu_label = QLabel(ten_thu)
+        thu_label.setFont(default_font)
         thu_label.setStyleSheet("padding-left: 10px;")
         layout.addWidget(thu_label)
     
@@ -86,6 +103,7 @@ class CourseClassesDialog(QDialog):
             gv_label = QLabel(lop.ten_giao_vien)
         else:
             gv_label = QLabel("")
+        gv_label.setFont(default_font)
         gv_label.setStyleSheet("padding-left: 0px;")
         layout.addWidget(gv_label)
         
@@ -113,26 +131,38 @@ class CourseClassesDialog(QDialog):
         """Xử lý sửa lớp học trực tiếp trong dialog (không đóng dialog)."""
         # Lấy khung giờ đầu tiên để điền sẵn vào dialog (nếu có)
         default_thu = None
-        default_tiet = None
+        default_tiet_bd = None
+        default_tiet_kt = None
         if lop.cac_khung_gio:
             gio_dau = lop.cac_khung_gio[0]
             default_thu = gio_dau.thu
-            default_tiet = gio_dau.tiet_bat_dau
+            default_tiet_bd = gio_dau.tiet_bat_dau
+            default_tiet_kt = gio_dau.tiet_ket_thuc
 
         dialog = ClassDialog(
             self.all_courses,
             default_thu=default_thu,
-            default_tiet=default_tiet,
+            default_tiet=default_tiet_bd,
             fixed_mon_hoc=self.mon_hoc,
+            lop_hoc_hien_tai=lop,
             parent=self,
         )
 
         # Điền sẵn thông tin lớp hiện tại
         dialog.ma_lop_edit.setText(lop.ma_lop)
         dialog.ten_gv_edit.setText(lop.ten_giao_vien)
+        # Set loại lớp trước khi populate list để đảm bảo hiển thị đúng
         dialog.loai_lop_combo.setCurrentText(getattr(lop, "loai_lop", "Lớp"))
+        # Set tiết kết thúc đúng
+        if default_tiet_kt:
+            dialog.tiet_kt_spin.setValue(default_tiet_kt)
+        # Populate lại list sau khi set loại lớp
+        dialog._populate_rang_buoc_list()
 
         if dialog.exec():
+            # Khôi phục font gốc sau khi dialog đóng để đảm bảo font không bị thay đổi
+            self.setFont(self.original_font)
+            
             data = dialog.get_data()
             if not data:
                 QMessageBox.warning(
@@ -149,7 +179,8 @@ class CourseClassesDialog(QDialog):
                 data["ten_gv"],
                 self.mon_hoc.ma_mon,
                 self.mon_hoc.ten_mon,
-                loai_lop=data.get("loai_lop", lop.loai_lop)
+                loai_lop=data.get("loai_lop", lop.loai_lop),
+                lop_rang_buoc=data.get("lop_rang_buoc", lop.lop_rang_buoc)
             )
             temp_lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
             
@@ -159,24 +190,36 @@ class CourseClassesDialog(QDialog):
                 QMessageBox.warning(self, "Lỗi", error_msg)
                 return
             
+            # Lưu lại danh sách ràng buộc cũ để cập nhật ràng buộc 2 chiều
+            old_rang_buoc = list(lop.lop_rang_buoc) if lop.lop_rang_buoc else []
+            new_rang_buoc = data.get("lop_rang_buoc", [])
+            
             # Cập nhật thông tin lớp hiện tại thay vì tạo lớp mới
             lop.ma_lop = data["ma_lop"]
             lop.ten_giao_vien = data["ten_gv"]
             lop.loai_lop = data.get("loai_lop", lop.loai_lop)
+            lop.lop_rang_buoc = new_rang_buoc
             # Cập nhật lại khung giờ (tạm thời chỉ 1 khung giờ)
             lop.cac_khung_gio.clear()
             lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
 
             # Nếu mã lớp thay đổi, cần cập nhật lại dict của môn học
-            if old_id != lop.get_id():
+            new_id = lop.get_id()
+            if old_id != new_id:
                 if old_id in self.mon_hoc.cac_lop_hoc_dict:
                     del self.mon_hoc.cac_lop_hoc_dict[old_id]
-                self.mon_hoc.cac_lop_hoc_dict[lop.get_id()] = lop
+                self.mon_hoc.cac_lop_hoc_dict[new_id] = lop
+
+            # Cập nhật ràng buộc 2 chiều
+            self._update_bidirectional_constraints(old_id, old_rang_buoc, new_id, new_rang_buoc)
 
             # Lưu và refresh lại giao diện
             save_data(self.all_courses)
-            self.edited_classes[lop.get_id()] = lop
+            self.edited_classes[new_id] = lop
             self._populate_classes()
+            
+            # Đảm bảo font không bị thay đổi sau khi populate
+            self.setFont(self.original_font)
     
     def handle_delete_class(self, lop):
         """Xử lý xóa lớp học trực tiếp trong dialog (không đóng dialog)."""
@@ -212,6 +255,9 @@ class CourseClassesDialog(QDialog):
     
     def _populate_classes(self):
         """Điền danh sách các lớp vào scroll area"""
+        # Đảm bảo font không bị thay đổi trước khi populate
+        self.setFont(self.original_font)
+        
         # Xóa tất cả widget cũ
         while self.scroll_layout.count():
             child = self.scroll_layout.takeAt(0)
@@ -242,19 +288,29 @@ class CourseClassesDialog(QDialog):
                 header_layout = QHBoxLayout()
                 header_layout.setSpacing(20)
                 header_layout.setContentsMargins(8, 0, 0, 0)
-                header_layout.addWidget(QLabel("Phòng học"))
                 
-                # header_layout.addWidget(QLabel("Giờ học"))
+                # Đảm bảo font size không bị nhỏ hơn
+                default_font = self.original_font
+                if default_font.pointSize() < 10:
+                    default_font = QFont(default_font)
+                    default_font.setPointSize(10)
+                
+                phong_label = QLabel("Phòng học")
+                phong_label.setFont(default_font)
+                header_layout.addWidget(phong_label)
+                
                 gio_label = QLabel("Giờ học")
+                gio_label.setFont(default_font)
                 gio_label.setStyleSheet("padding-left: 0px;")
                 header_layout.addWidget(gio_label)
-                # header_layout.addWidget(QLabel("Thứ"))
+                
                 thu_label = QLabel("Thứ")
+                thu_label.setFont(default_font)
                 thu_label.setStyleSheet("padding-left: 5px;")
                 header_layout.addWidget(thu_label)
 
-                # header_layout.addWidget(QLabel("GV"))
                 GV_label = QLabel("GV")
+                GV_label.setFont(default_font)
                 GV_label.setStyleSheet("padding-left: 17px;")
                 header_layout.addWidget(GV_label)
                 
@@ -275,6 +331,9 @@ class CourseClassesDialog(QDialog):
         """Xử lý thêm lớp học mới"""
         dialog = ClassDialog(self.all_courses, fixed_mon_hoc=self.mon_hoc, parent=self)
         if dialog.exec():
+            # Khôi phục font gốc sau khi dialog đóng để đảm bảo font không bị thay đổi
+            self.setFont(self.original_font)
+            
             data = dialog.get_data()
             if data:
                 new_lop = LopHoc(
@@ -282,7 +341,8 @@ class CourseClassesDialog(QDialog):
                     data['ten_gv'], 
                     self.mon_hoc.ma_mon, 
                     self.mon_hoc.ten_mon,
-                    loai_lop=data.get('loai_lop', 'Lớp')
+                    loai_lop=data.get('loai_lop', 'Lớp'),
+                    lop_rang_buoc=data.get('lop_rang_buoc', [])
                 )
                 new_lop.them_khung_gio(data['thu'], data['tiet_bd'], data['tiet_kt'])
                 
@@ -298,11 +358,61 @@ class CourseClassesDialog(QDialog):
                                       f"Lớp học '{data['ma_lop']}' đã tồn tại với cùng giờ học trong môn này.")
                     return
                 
+                # Cập nhật ràng buộc 2 chiều cho lớp mới
+                new_lop_id = new_lop.get_id()
+                new_rang_buoc = data.get('lop_rang_buoc', [])
+                self._update_bidirectional_constraints(None, [], new_lop_id, new_rang_buoc)
+                
                 save_data(self.all_courses)
                 # Refresh lại danh sách
                 self._populate_classes()
+                # Đảm bảo font không bị thay đổi sau khi populate
+                self.setFont(self.original_font)
                 QMessageBox.information(self, "Thành công", f"Đã thêm lớp {data['ma_lop']} cho môn {self.mon_hoc.ma_mon}")
             else:
                 QMessageBox.warning(self, "Lỗi", 
                                   "Vui lòng điền đủ thông tin và đảm bảo tiết bắt đầu <= tiết kết thúc.")
+    
+    def _update_bidirectional_constraints(self, old_lop_id, old_rang_buoc, new_lop_id, new_rang_buoc):
+        """Cập nhật ràng buộc 2 chiều: nếu lớp A ràng buộc với lớp B, thì lớp B cũng ràng buộc với lớp A"""
+        # Tìm lớp hiện tại
+        current_lop = None
+        for mon_hoc in self.all_courses.values():
+            for lop in mon_hoc.cac_lop_hoc:
+                if lop.get_id() == new_lop_id:
+                    current_lop = lop
+                    break
+            if current_lop:
+                break
+        
+        if not current_lop:
+            return
+        
+        # Xóa ràng buộc cũ (nếu có)
+        if old_lop_id:
+            for old_rang_buoc_id in old_rang_buoc:
+                # Tìm lớp ràng buộc cũ
+                old_rang_buoc_lop = self._find_lop_by_id(old_rang_buoc_id)
+                if old_rang_buoc_lop and old_lop_id in (old_rang_buoc_lop.lop_rang_buoc or []):
+                    # Xóa ràng buộc ngược lại
+                    old_rang_buoc_lop.lop_rang_buoc.remove(old_lop_id)
+        
+        # Thêm ràng buộc mới (2 chiều)
+        for new_rang_buoc_id in new_rang_buoc:
+            # Tìm lớp ràng buộc mới
+            new_rang_buoc_lop = self._find_lop_by_id(new_rang_buoc_id)
+            if new_rang_buoc_lop:
+                # Đảm bảo lớp ràng buộc cũng ràng buộc với lớp hiện tại
+                if not new_rang_buoc_lop.lop_rang_buoc:
+                    new_rang_buoc_lop.lop_rang_buoc = []
+                if new_lop_id not in new_rang_buoc_lop.lop_rang_buoc:
+                    new_rang_buoc_lop.lop_rang_buoc.append(new_lop_id)
+    
+    def _find_lop_by_id(self, lop_id):
+        """Tìm lớp học theo ID (ma_mon-ma_lop)"""
+        for mon_hoc in self.all_courses.values():
+            for lop in mon_hoc.cac_lop_hoc:
+                if lop.get_id() == lop_id:
+                    return lop
+        return None
 

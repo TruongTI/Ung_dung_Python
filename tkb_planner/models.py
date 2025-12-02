@@ -168,7 +168,7 @@ class LichBan:
 class LopHoc:
     """Đại diện cho một lớp học cụ thể"""
     
-    def __init__(self, ma_lop, ten_giao_vien, ma_mon, ten_mon, color_hex=None, loai_lop="Lớp"):
+    def __init__(self, ma_lop, ten_giao_vien, ma_mon, ten_mon, color_hex=None, loai_lop="Lớp", lop_rang_buoc=None):
         self.ma_lop = ma_lop
         self.ten_giao_vien = ten_giao_vien
         self.ma_mon = ma_mon
@@ -176,6 +176,7 @@ class LopHoc:
         self.cac_khung_gio = []
         self.color_hex = color_hex or "#ADD8E6"
         self.loai_lop = loai_lop  # "Lý thuyết", "Bài tập", hoặc "Lớp"
+        self.lop_rang_buoc = lop_rang_buoc or []  # Danh sách ID của các lớp bị ràng buộc (format: "ma_mon-ma_lop")
     
     def them_khung_gio(self, thu, tiet_bat_dau, tiet_ket_thuc):
         """Thêm một khung giờ học vào lớp"""
@@ -197,7 +198,8 @@ class LopHoc:
             'ten_mon': self.ten_mon,
             'cac_khung_gio': [gio.to_dict() for gio in self.cac_khung_gio],
             'color_hex': self.color_hex,
-            'loai_lop': self.loai_lop
+            'loai_lop': self.loai_lop,
+            'lop_rang_buoc': self.lop_rang_buoc  # Lưu danh sách ID lớp ràng buộc
         }
 
 

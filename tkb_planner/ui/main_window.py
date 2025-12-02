@@ -21,7 +21,7 @@ from ..data_handler import (
 )
 from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN
 from .schedule_widget import ScheduleWidget
-from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCompletedCoursesDialog
+from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCompletedCoursesDialog, EditAllSubjectsDialog, EditAllClassesDialog
 from .course_classes_dialog import CourseClassesDialog
 from .theme import LIGHT_THEME, DARK_THEME
 from .custom_checkbox import CustomCheckBox
@@ -238,6 +238,13 @@ class MainWindow(QMainWindow):
         add_class_action = QAction("Thêm Lớp học", self)
         add_class_action.triggered.connect(lambda: self.handle_add_class_dialog())
         edit_menu.addAction(add_class_action)
+        edit_menu.addSeparator()
+        edit_subject_action = QAction("Sửa môn học", self)
+        edit_subject_action.triggered.connect(self.handle_edit_all_subjects)
+        edit_menu.addAction(edit_subject_action)
+        edit_class_action = QAction("Sửa lớp học", self)
+        edit_class_action.triggered.connect(self.handle_edit_all_classes)
+        edit_menu.addAction(edit_class_action)
         
         # Menu View
         view_menu = menu_bar.addMenu("&View")
@@ -377,7 +384,18 @@ class MainWindow(QMainWindow):
                 mon_hoc.ten_mon = data['ten_mon']
                 mon_hoc.tien_quyet = data['tien_quyet']
                 save_data(self.all_courses)
+                # Refresh lại danh sách môn học để cập nhật thông tin
                 self._populate_course_list()
+                # Cập nhật lại schedule nếu đang hiển thị
+                active_busy_times = self._get_active_busy_times()
+                if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+                    self.schedule_view.display_schedule(
+                        self.danh_sach_tkb_tim_duoc[self.current_tkb_index],
+                        self.all_courses,
+                        active_busy_times
+                    )
+                else:
+                    self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
                 self.log_message(f"Đã cập nhật môn học: {ma_mon}")
             else:
                 QMessageBox.warning(self, "Lỗi", "Tên môn không được để trống.")
@@ -395,7 +413,8 @@ class MainWindow(QMainWindow):
                 mon_hoc = self.all_courses[data['ma_mon']]
                 new_lop = LopHoc(data['ma_lop'], data['ten_gv'], 
                                mon_hoc.ma_mon, mon_hoc.ten_mon,
-                               loai_lop=data.get('loai_lop', 'Lớp'))
+                               loai_lop=data.get('loai_lop', 'Lớp'),
+                               lop_rang_buoc=data.get('lop_rang_buoc', []))
                 new_lop.them_khung_gio(data['thu'], data['tiet_bd'], data['tiet_kt'])
                 
                 # Kiểm tra trùng trong cùng môn (phòng học, giáo viên và trùng giờ)
@@ -514,8 +533,19 @@ class MainWindow(QMainWindow):
             if ma_mon in self.completed_courses:
                 self.completed_courses.remove(ma_mon)
                 save_completed_courses(self.completed_courses)
-            self._populate_course_list()
             save_data(self.all_courses)
+            # Refresh lại danh sách môn học
+            self._populate_course_list()
+            # Cập nhật lại schedule nếu đang hiển thị
+            active_busy_times = self._get_active_busy_times()
+            if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+                self.schedule_view.display_schedule(
+                    self.danh_sach_tkb_tim_duoc[self.current_tkb_index],
+                    self.all_courses,
+                    active_busy_times
+                )
+            else:
+                self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
             self.log_message(f"Đã xoá môn {ma_mon}.")
 
     def filter_course_list(self):
@@ -634,7 +664,7 @@ class MainWindow(QMainWindow):
         self.log_message("Đang tìm kiếm TKB...")
         QApplication.processEvents()
         self.danh_sach_tkb_tim_duoc, error_msg = tim_thoi_khoa_bieu(
-            selected_courses, active_busy_times, mandatory_courses, self.completed_courses
+            selected_courses, active_busy_times, mandatory_courses, self.completed_courses, self.all_courses
         )
         if error_msg:
             self.log_message(error_msg)
@@ -878,18 +908,30 @@ class MainWindow(QMainWindow):
     def handle_show_course_classes(self, mon_hoc):
         """Hiển thị dialog các lớp học của môn học"""
         dialog = CourseClassesDialog(mon_hoc, all_courses=self.all_courses, parent=self)
-        if dialog.exec():
-            # Xử lý các lớp đã xóa
-            deleted_classes = dialog.get_deleted_classes()
+        dialog.exec()  # Luôn refresh sau khi đóng dialog, không cần kiểm tra return value
+        # Xử lý các lớp đã xóa (nếu có)
+        deleted_classes = dialog.get_deleted_classes()
+        if deleted_classes:
             for lop in deleted_classes:
                 mon_hoc.cac_lop_hoc = [l for l in mon_hoc.cac_lop_hoc if l.get_id() != lop.get_id()]
                 mon_hoc.cac_lop_hoc_dict.pop(lop.get_id(), None)
                 self.log_message(f"Đã xóa lớp {lop.ma_lop} khỏi môn {mon_hoc.ma_mon}")
-            
             # Lưu dữ liệu
-            if deleted_classes:
-                save_data(self.all_courses)
-                self.log_message(f"Đã cập nhật danh sách lớp học của môn {mon_hoc.ma_mon}")
+            save_data(self.all_courses)
+            self.log_message(f"Đã cập nhật danh sách lớp học của môn {mon_hoc.ma_mon}")
+        
+        # Luôn refresh lại danh sách môn học để cập nhật số lớp học
+        self._populate_course_list()
+        # Cập nhật lại schedule nếu đang hiển thị
+        active_busy_times = self._get_active_busy_times()
+        if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+            self.schedule_view.display_schedule(
+                self.danh_sach_tkb_tim_duoc[self.current_tkb_index],
+                self.all_courses,
+                active_busy_times
+            )
+        else:
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
 
     def handle_input_completed_courses(self):
         """Xử lý nhập môn đã học"""
@@ -945,6 +987,54 @@ class MainWindow(QMainWindow):
                 self._populate_course_list()
             else:
                 self.log_message("Lỗi khi lưu danh sách môn đã học.")
+
+    def handle_edit_all_subjects(self):
+        """Hiển thị dialog để sửa/xóa tất cả môn học"""
+        if not self.all_courses:
+            QMessageBox.information(self, "Thông báo", "Chưa có môn học nào để sửa.")
+            return
+        
+        dialog = EditAllSubjectsDialog(self.all_courses, self)
+        dialog.exec()
+        # Refresh lại danh sách môn học sau khi đóng dialog
+        self._populate_course_list()
+        # Cập nhật lại schedule nếu đang hiển thị
+        active_busy_times = self._get_active_busy_times()
+        if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+            self.schedule_view.display_schedule(
+                self.danh_sach_tkb_tim_duoc[self.current_tkb_index],
+                self.all_courses,
+                active_busy_times
+            )
+        else:
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
+    
+    def handle_edit_all_classes(self):
+        """Hiển thị dialog để sửa/xóa tất cả lớp học"""
+        if not self.all_courses:
+            QMessageBox.information(self, "Thông báo", "Chưa có môn học nào.")
+            return
+        
+        # Kiểm tra xem có lớp học nào không
+        has_classes = any(mon.cac_lop_hoc for mon in self.all_courses.values())
+        if not has_classes:
+            QMessageBox.information(self, "Thông báo", "Chưa có lớp học nào để sửa.")
+            return
+        
+        dialog = EditAllClassesDialog(self.all_courses, self)
+        dialog.exec()
+        # Refresh lại danh sách môn học sau khi đóng dialog
+        self._populate_course_list()
+        # Cập nhật lại schedule nếu đang hiển thị
+        active_busy_times = self._get_active_busy_times()
+        if self.current_tkb_index >= 0 and self.danh_sach_tkb_tim_duoc:
+            self.schedule_view.display_schedule(
+                self.danh_sach_tkb_tim_duoc[self.current_tkb_index],
+                self.all_courses,
+                active_busy_times
+            )
+        else:
+            self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
 
     def apply_theme(self):
         """Áp dụng theme (sáng hoặc tối) cho ứng dụng"""

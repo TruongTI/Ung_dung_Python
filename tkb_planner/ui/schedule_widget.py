@@ -213,66 +213,73 @@ class ScheduleWidget(QWidget):
                                           int(rect_height)-4, 5, 5)
                     text_rect = int(x)+5, int(y)+5, int(rect_width)-10, int(rect_height)-10
                     text_rect_x, text_rect_y, text_rect_w, text_rect_h = text_rect
-                    current_y = text_rect_y
                     
-                    # Vẽ mã lớp to hơn, đậm và màu khác
+                    # Tính tổng chiều cao của tất cả các phần text trước để căn giữa
                     painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
                     ma_lop_text = f"Lớp: {lop_hoc.ma_lop}"
                     font_metrics = painter.fontMetrics()
-                    # Tính chiều cao với word wrap
                     ma_lop_rect = font_metrics.boundingRect(
                         text_rect_x, text_rect_y, text_rect_w, 0,
                         Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_lop_text
                     )
                     ma_lop_height = ma_lop_rect.height()
-                    # Đặt màu xanh cho mã lớp
+                    
+                    painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+                    ten_mon_font_metrics = painter.fontMetrics()
+                    ten_mon_rect = ten_mon_font_metrics.boundingRect(
+                        text_rect_x, text_rect_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, lop_hoc.ten_mon
+                    )
+                    ten_mon_height = ten_mon_rect.height()
+                    
+                    painter.setFont(QFont("Segoe UI", 9))
+                    normal_font_metrics = painter.fontMetrics()
+                    ma_mon_text = f"({lop_hoc.ma_mon})"
+                    ma_mon_rect = normal_font_metrics.boundingRect(
+                        text_rect_x, text_rect_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_mon_text
+                    )
+                    ma_mon_height = ma_mon_rect.height()
+                    
+                    gv_text = f"GV: {lop_hoc.ten_giao_vien}"
+                    gv_rect = normal_font_metrics.boundingRect(
+                        text_rect_x, text_rect_y, text_rect_w, 0,
+                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, gv_text
+                    )
+                    gv_height = gv_rect.height()
+                    
+                    # Tính tổng chiều cao (bao gồm khoảng cách giữa các dòng)
+                    spacing = 2
+                    total_text_height = ma_lop_height + spacing + ten_mon_height + spacing + ma_mon_height + spacing + gv_height
+                    
+                    # Tính offset để căn giữa theo chiều dọc (chuyển sang int)
+                    vertical_offset = int((text_rect_h - total_text_height) / 2)
+                    current_y = text_rect_y + vertical_offset
+                    
+                    # Vẽ mã lớp to hơn, đậm và màu khác
+                    painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
                     ma_lop_color = QColor("#0066CC") 
                     painter.setPen(ma_lop_color)
                     painter.drawText(text_rect_x, current_y, text_rect_w, ma_lop_height,
                                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_lop_text)
-                    current_y += ma_lop_height + 2  # Thêm khoảng cách nhỏ
-                    
-                    # Vẽ các phần còn lại với font bình thường và word wrap
-                    painter.setFont(QFont("Segoe UI", 9))
-                    painter.setPen(text_color)
-                    normal_font_metrics = painter.fontMetrics()
+                    current_y += ma_lop_height + spacing
                     
                     # Vẽ tên môn với word wrap, màu riêng, cỡ chữ lớn hơn và in đậm
                     ten_mon_color = QColor("#DC143C")
                     painter.setPen(ten_mon_color)
-                    # Đặt font cho tên môn: size 10, Bold
                     painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-                    ten_mon_font_metrics = painter.fontMetrics()
-                    ten_mon_rect = ten_mon_font_metrics.boundingRect(
-                        text_rect_x, current_y, text_rect_w, 0,
-                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, lop_hoc.ten_mon
-                    )
-                    ten_mon_height = ten_mon_rect.height()
                     painter.drawText(text_rect_x, current_y, text_rect_w, ten_mon_height,
                                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, lop_hoc.ten_mon)
-                    # Đặt lại font và màu text mặc định cho các phần sau
                     painter.setFont(QFont("Segoe UI", 9))
                     painter.setPen(text_color)
-                    current_y += ten_mon_height + 2
+                    current_y += ten_mon_height + spacing
                     
                     # Vẽ mã môn với word wrap
-                    ma_mon_text = f"({lop_hoc.ma_mon})"
-                    ma_mon_rect = normal_font_metrics.boundingRect(
-                        text_rect_x, current_y, text_rect_w, 0,
-                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_mon_text
-                    )
-                    ma_mon_height = ma_mon_rect.height()
                     painter.drawText(text_rect_x, current_y, text_rect_w, ma_mon_height,
                                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, ma_mon_text)
-                    current_y += ma_mon_height + 2
+                    current_y += ma_mon_height + spacing
                     
                     # Vẽ giáo viên với word wrap
-                    gv_text = f"GV: {lop_hoc.ten_giao_vien}"
-                    gv_rect = normal_font_metrics.boundingRect(
-                        text_rect_x, current_y, text_rect_w, 0,
-                        Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, gv_text
-                    )
-                    gv_height = gv_rect.height()
                     painter.drawText(text_rect_x, current_y, text_rect_w, gv_height,
                                    Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, gv_text)
 

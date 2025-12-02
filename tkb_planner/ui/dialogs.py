@@ -5,10 +5,11 @@ Các dialog dùng để nhập liệu
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QDialogButtonBox,
     QComboBox, QSpinBox, QVBoxLayout, QListWidget, QPushButton,
-    QLabel, QHBoxLayout, QMessageBox, QScrollArea, QWidget, QGroupBox
+    QLabel, QHBoxLayout, QMessageBox, QScrollArea, QWidget, QGroupBox,
+    QListWidgetItem, QCheckBox
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QBrush, QColor
 
 from ..constants import TEN_THU_TRONG_TUAN
 
@@ -57,23 +58,31 @@ class SubjectDialog(QDialog):
 class ClassDialog(QDialog):
     """Dialog để thêm lớp học mới"""
     
-    def __init__(self, all_courses, default_thu=None, default_tiet=None, fixed_mon_hoc=None, parent=None):
+    def __init__(self, all_courses, default_thu=None, default_tiet=None, fixed_mon_hoc=None, lop_hoc_hien_tai=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Thêm Lớp học mới")
+        self.setWindowTitle("Sửa Lớp học" if lop_hoc_hien_tai else "Thêm Lớp học mới")
         self.all_courses = all_courses
+        self.lop_hoc_hien_tai = lop_hoc_hien_tai
         self.layout = QFormLayout(self)
         
         self.mon_hoc_combo = QComboBox()
         self.mon_hoc_combo.addItems(sorted(all_courses.keys()))
         # Nếu có fixed_mon_hoc, set và disable combo box
+        self.fixed_mon_hoc = fixed_mon_hoc
         if fixed_mon_hoc:
             self.mon_hoc_combo.setCurrentText(fixed_mon_hoc.ma_mon)
             self.mon_hoc_combo.setEnabled(False)
+        else:
+            # Kết nối signal để cập nhật danh sách lớp ràng buộc khi thay đổi môn học
+            self.mon_hoc_combo.currentTextChanged.connect(self._populate_rang_buoc_list)
+        
         self.ma_lop_edit = QLineEdit()
         self.ten_gv_edit = QLineEdit()
         # Combo box để chọn loại lớp
         self.loai_lop_combo = QComboBox()
         self.loai_lop_combo.addItems(["Lý thuyết", "Bài tập", "Lớp"])
+        # Kết nối signal để cập nhật danh sách lớp ràng buộc khi thay đổi loại lớp
+        self.loai_lop_combo.currentTextChanged.connect(self._populate_rang_buoc_list)
         self.thu_combo = QComboBox()
         self.thu_combo.addItems(TEN_THU_TRONG_TUAN.values())
         self.tiet_bd_spin = QSpinBox()
@@ -95,12 +104,219 @@ class ClassDialog(QDialog):
         self.layout.addRow("Tiết bắt đầu:", self.tiet_bd_spin)
         self.layout.addRow("Tiết kết thúc:", self.tiet_kt_spin)
         
+        # List widget để chọn lớp ràng buộc
+        rang_buoc_label = QLabel("Lớp ràng buộc (click vào lớp để chọn/bỏ chọn - nền xám = đã chọn):")
+        self.rang_buoc_list = QListWidget()
+        # Dùng NoSelection để tự quản lý selection thông qua background color
+        # Điều này tránh việc MultiSelection tự động chọn nhiều item cùng lúc
+        self.rang_buoc_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        # Thêm padding cho list widget items
+        self.rang_buoc_list.setStyleSheet("QListWidget::item { padding: 5px; }")
+        # Kết nối signal để toggle selection và highlight khi click
+        self.rang_buoc_list.itemClicked.connect(self._on_rang_buoc_item_clicked)
+        
+        # Nếu đang sửa lớp, set loại lớp trước khi populate list
+        if lop_hoc_hien_tai:
+            loai_lop = getattr(lop_hoc_hien_tai, 'loai_lop', 'Lớp')
+            self.loai_lop_combo.setCurrentText(loai_lop)
+        
+        # Populate list sau khi đã set tất cả thông tin
+        self._populate_rang_buoc_list()
+        self.layout.addRow(rang_buoc_label)
+        self.layout.addRow(self.rang_buoc_list)
+        
         self.buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
         self.layout.addWidget(self.buttons)
+    
+    def _populate_rang_buoc_list(self):
+        """Điền danh sách các lớp có thể ràng buộc (chỉ hiển thị các lớp của cùng môn học, khác giờ).
+        Các lớp đã có trong danh sách ràng buộc sẽ luôn được hiển thị, ngay cả khi trùng giờ."""
+        from ..scheduler import check_trung_lich
+        
+        # Lưu lại danh sách các lớp đã chọn trước khi clear (dùng UserRole + 1)
+        # CHỈ lấy những lớp thực sự được chọn (is_selected = True)
+        selected_lop_ids = set()
+        for i in range(self.rang_buoc_list.count()):
+            item = self.rang_buoc_list.item(i)
+            is_selected = item.data(Qt.ItemDataRole.UserRole + 1)
+            # CHỈ thêm vào nếu is_selected là True (không phải None hoặc False)
+            if is_selected is True:
+                lop_id = item.data(Qt.ItemDataRole.UserRole)
+                if lop_id:
+                    selected_lop_ids.add(lop_id)
+        
+        self.rang_buoc_list.clear()
+        lop_hien_tai_id = None
+        loai_lop_hien_tai = None
+        lop_hien_tai = None
+        
+        # Ưu tiên lấy từ lop_hoc_hien_tai nếu có (khi sửa)
+        if self.lop_hoc_hien_tai:
+            lop_hien_tai = self.lop_hoc_hien_tai
+            lop_hien_tai_id = lop_hien_tai.get_id()
+            loai_lop_hien_tai = getattr(lop_hien_tai, 'loai_lop', 'Lớp')
+        else:
+            # Nếu đang thêm mới, lấy loại lớp từ combo box
+            loai_lop_hien_tai = self.loai_lop_combo.currentText()
+        
+        # Lấy môn học hiện tại
+        if self.fixed_mon_hoc:
+            ma_mon_hien_tai = self.fixed_mon_hoc.ma_mon
+        else:
+            ma_mon_hien_tai = self.mon_hoc_combo.currentText()
+        
+        # Chỉ hiển thị các lớp của môn học hiện tại
+        if ma_mon_hien_tai and ma_mon_hien_tai in self.all_courses:
+            mon_hoc = self.all_courses[ma_mon_hien_tai]
+            for lop in mon_hoc.cac_lop_hoc:
+                # Loại trừ lớp hiện tại (không thể ràng buộc với chính nó)
+                # So sánh bằng object reference để đảm bảo chỉ loại bỏ chính xác lớp đang sửa
+                if lop_hien_tai and lop is lop_hien_tai:
+                    continue
+                
+                # Nếu lớp hiện tại là "Lý thuyết" hoặc "Bài tập", chỉ hiển thị các lớp "Lý thuyết" và "Bài tập"
+                # Nếu lớp hiện tại là "Lớp", hiển thị tất cả các lớp khác
+                if loai_lop_hien_tai in ["Lý thuyết", "Bài tập"]:
+                    # Chỉ hiển thị lớp "Lý thuyết" và "Bài tập", không hiển thị "Lớp"
+                    if lop.loai_lop not in ["Lý thuyết", "Bài tập"]:
+                        continue
+                # Nếu loại lớp hiện tại là "Lớp", hiển thị tất cả (không cần filter)
+                
+                # Kiểm tra trùng giờ: chỉ hiển thị các lớp không trùng giờ với lớp hiện tại
+                # Tuy nhiên, nếu lớp đó đã có trong danh sách ràng buộc hoặc đã được chọn, vẫn hiển thị
+                # Chỉ kiểm tra khi đang sửa lớp (có lop_hien_tai)
+                if lop_hien_tai:
+                    # Kiểm tra xem lớp này có trong danh sách ràng buộc không
+                    lop_id = lop.get_id()
+                    is_in_rang_buoc = (lop_hien_tai.lop_rang_buoc and 
+                                      lop_id in lop_hien_tai.lop_rang_buoc)
+                    # Kiểm tra xem lớp này có trong danh sách đã chọn không
+                    is_in_selected = lop_id in selected_lop_ids
+                    
+                    # Nếu trùng giờ và không phải là lớp ràng buộc/đã chọn, bỏ qua
+                    if check_trung_lich(lop_hien_tai, lop) and not is_in_rang_buoc and not is_in_selected:
+                        continue  # Bỏ qua lớp trùng giờ (trừ khi là lớp ràng buộc hoặc đã chọn)
+                
+                # Tạo chuỗi hiển thị thứ và giờ học
+                gio_hoc_str = ""
+                if lop.cac_khung_gio:
+                    gio_list = []
+                    for gio in lop.cac_khung_gio:
+                        ten_thu = TEN_THU_TRONG_TUAN.get(gio.thu, f"Thứ {gio.thu}")
+                        gio_list.append(f"{ten_thu} Tiết {gio.tiet_bat_dau}-{gio.tiet_ket_thuc}")
+                    gio_hoc_str = " | ".join(gio_list)
+                
+                item_text = f"{lop.ma_lop} - {lop.ten_giao_vien} [{lop.loai_lop}] - {gio_hoc_str}"
+                item = QListWidgetItem(item_text)
+                item.setData(Qt.ItemDataRole.UserRole, lop.get_id())  # Lưu ID của lớp
+                # Lấy font từ widget để đảm bảo font size không bị thay đổi
+                widget_font = self.rang_buoc_list.font()
+                item.setFont(widget_font)
+                self.rang_buoc_list.addItem(item)
+        
+        # CHỈ lấy các lớp ràng buộc từ lop_hoc_hien_tai để hiển thị trong list
+        # KHÔNG tự động chọn chúng - người dùng phải tự chọn
+        # Lưu ý: Các lớp ràng buộc 2 chiều sẽ được hiển thị trong list nhưng không tự động được chọn
+        lop_rang_buoc_to_display = set()
+        if self.lop_hoc_hien_tai:
+            # Lấy các lớp ràng buộc trực tiếp (để hiển thị trong list, không tự động chọn)
+            if self.lop_hoc_hien_tai.lop_rang_buoc:
+                lop_rang_buoc_to_display = set(self.lop_hoc_hien_tai.lop_rang_buoc)
+            
+            # Thêm logic ràng buộc 2 chiều: nếu lớp hiện tại được ràng buộc bởi lớp khác,
+            # thì lớp đó cũng phải được hiển thị trong list (nhưng không tự động chọn)
+            current_lop_id = self.lop_hoc_hien_tai.get_id()
+            # Tìm tất cả các lớp có ràng buộc với lớp hiện tại
+            for mon_hoc in self.all_courses.values():
+                for lop in mon_hoc.cac_lop_hoc:
+                    if lop.lop_rang_buoc and current_lop_id in lop.lop_rang_buoc:
+                        # Lớp này ràng buộc với lớp hiện tại, thêm vào danh sách để hiển thị
+                        lop_rang_buoc_to_display.add(lop.get_id())
+        
+        # QUAN TRỌNG: Chỉ dùng selected_lop_ids nếu đây là lần populate lại (list đã có items trước đó)
+        # Nếu là lần đầu populate (selected_lop_ids rỗng), KHÔNG auto chọn bất kỳ lớp nào
+        # Nếu là lần populate lại, CHỈ giữ lại những lớp đã được chọn trước đó (selected_lop_ids)
+        # KHÔNG tự động thêm các lớp ràng buộc vào selected
+        
+        # Lấy danh sách tất cả các lop_id có trong list mới (sau khi populate)
+        available_lop_ids = set()
+        for i in range(self.rang_buoc_list.count()):
+            item = self.rang_buoc_list.item(i)
+            lop_id = item.data(Qt.ItemDataRole.UserRole)
+            if lop_id:
+                available_lop_ids.add(lop_id)
+        
+        # QUAN TRỌNG: Không auto chọn các lớp ràng buộc khi mở dialog lần đầu
+        # Chỉ hiển thị chúng trong list, người dùng phải tự chọn
+        if not selected_lop_ids:
+            # Lần đầu populate, KHÔNG auto chọn các lớp ràng buộc
+            # Chỉ để rỗng, người dùng sẽ tự chọn
+            final_selected_ids = set()
+        else:
+            # Lần populate lại: CHỈ giữ lại những lớp đã được chọn trước đó VÀ có trong list mới
+            # Điều này đảm bảo không chọn những lớp không còn trong list
+            selected_lop_ids = selected_lop_ids.intersection(available_lop_ids)
+            # KHÔNG tự động thêm các lớp ràng buộc, chỉ giữ lại những lớp đã được chọn
+            final_selected_ids = selected_lop_ids
+        
+        # Gán lại để dùng ở dưới
+        selected_lop_ids = final_selected_ids
+        
+        # Đánh dấu các lớp đã chọn (dùng UserRole + 1 để lưu trạng thái selected)
+        for i in range(self.rang_buoc_list.count()):
+            item = self.rang_buoc_list.item(i)
+            lop_id = item.data(Qt.ItemDataRole.UserRole)
+            is_selected = lop_id in selected_lop_ids
+            item.setData(Qt.ItemDataRole.UserRole + 1, is_selected)
+            # Cập nhật highlight
+            self._update_item_highlight(item, is_selected)
+    
+    def _on_rang_buoc_item_clicked(self, item):
+        """Xử lý khi click vào item trong danh sách ràng buộc"""
+        # Lấy trạng thái hiện tại từ data (không dùng setSelected vì đã tắt selection mode)
+        is_selected = item.data(Qt.ItemDataRole.UserRole + 1)  # Dùng UserRole + 1 để lưu trạng thái selected
+        if is_selected is None:
+            is_selected = False
+        
+        # Toggle trạng thái
+        is_selected = not is_selected
+        item.setData(Qt.ItemDataRole.UserRole + 1, is_selected)
+        
+        # Cập nhật highlight cho item này
+        self._update_item_highlight(item, is_selected)
+    
+    def _update_item_highlight(self, item, is_selected):
+        """Cập nhật highlight cho một item cụ thể"""
+        # Lưu font hiện tại để giữ nguyên font size
+        current_font = item.font()
+        
+        if is_selected:
+            # Highlight với nền xám nhạt (mờ hơn, opacity thấp hơn)
+            brush = QBrush(QColor(220, 220, 220, 200))  # Màu xám nhạt với độ mờ
+            item.setBackground(brush)
+            # Đổi màu chữ sang đỏ để dễ nhìn hơn
+            item.setForeground(QBrush(QColor(200, 0, 0)))  # Màu đỏ
+        else:
+            # Bỏ highlight
+            item.setBackground(QBrush(Qt.GlobalColor.transparent))
+            # Màu chữ trắng khi chưa chọn
+            item.setForeground(QBrush(QColor(255, 255, 255)))  # Màu trắng
+        
+        # Đảm bảo font size không bị thay đổi - set lại font sau khi đổi màu
+        item.setFont(current_font)
+    
+    def _update_rang_buoc_highlight(self):
+        """Cập nhật highlight (nền xám) cho tất cả các item đã chọn"""
+        for i in range(self.rang_buoc_list.count()):
+            item = self.rang_buoc_list.item(i)
+            is_selected = item.data(Qt.ItemDataRole.UserRole + 1)
+            if is_selected is None:
+                is_selected = False
+            self._update_item_highlight(item, is_selected)
 
     def get_data(self):
         """Lấy dữ liệu từ dialog"""
@@ -121,6 +337,19 @@ class ClassDialog(QDialog):
         
         if not ma_mon or not ma_lop or not ten_gv or tiet_bd > tiet_kt:
             return None
+        
+        # Lấy danh sách lớp ràng buộc đã chọn (dùng UserRole + 1 để lấy trạng thái selected)
+        # CHỈ lấy những lớp thực sự được chọn (is_selected = True), không phải None hoặc truthy khác
+        lop_rang_buoc = []
+        for i in range(self.rang_buoc_list.count()):
+            item = self.rang_buoc_list.item(i)
+            is_selected = item.data(Qt.ItemDataRole.UserRole + 1)
+            # CHỈ thêm vào nếu is_selected là True (không phải None hoặc truthy khác)
+            if is_selected is True:
+                lop_id = item.data(Qt.ItemDataRole.UserRole)
+                if lop_id:
+                    lop_rang_buoc.append(lop_id)
+        
         return {
             'ma_mon': ma_mon, 
             'ma_lop': ma_lop, 
@@ -128,7 +357,8 @@ class ClassDialog(QDialog):
             'loai_lop': loai_lop,
             'thu': thu, 
             'tiet_bd': tiet_bd, 
-            'tiet_kt': tiet_kt
+            'tiet_kt': tiet_kt,
+            'lop_rang_buoc': lop_rang_buoc
         }
 
 
@@ -371,3 +601,373 @@ class ViewCompletedCoursesDialog(QDialog):
         """Lấy danh sách môn đã học sau khi chỉnh sửa"""
         return self.completed_courses
 
+
+class EditAllSubjectsDialog(QDialog):
+    """Dialog để hiển thị và sửa/xóa tất cả môn học"""
+    
+    def __init__(self, all_courses, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sửa môn học")
+        self.setMinimumSize(800, 600)
+        self.all_courses = all_courses
+        
+        layout = QVBoxLayout(self)
+        
+        # Scroll area để chứa danh sách môn học
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        self.scroll_widget = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setSpacing(10)
+        
+        self._populate_subjects()
+        
+        scroll.setWidget(self.scroll_widget)
+        layout.addWidget(scroll)
+        
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Close
+        )
+        buttons.rejected.connect(self.accept)
+        layout.addWidget(buttons)
+    
+    def _populate_subjects(self):
+        """Điền danh sách môn học vào scroll area"""
+        # Xóa tất cả widget cũ
+        while self.scroll_layout.count():
+            child = self.scroll_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # Hiển thị từng môn học
+        for ma_mon in sorted(self.all_courses.keys()):
+            mon_hoc = self.all_courses[ma_mon]
+            group = QGroupBox(f"{mon_hoc.ten_mon} ({ma_mon})")
+            group_layout = QVBoxLayout(group)
+            
+            # Thông tin môn học
+            info_layout = QHBoxLayout()
+            info_layout.addWidget(QLabel(f"Mã môn: {ma_mon}"))
+            info_layout.addWidget(QLabel(f"Tên môn: {mon_hoc.ten_mon}"))
+            if mon_hoc.tien_quyet:
+                info_layout.addWidget(QLabel(f"Môn tiên quyết: {', '.join(mon_hoc.tien_quyet)}"))
+            info_layout.addStretch()
+            
+            # Nút sửa và xóa
+            edit_btn = QPushButton("Sửa")
+            edit_btn.setMinimumWidth(80)
+            edit_btn.clicked.connect(lambda checked, m=mon_hoc: self.handle_edit_subject(m))
+            
+            delete_btn = QPushButton("Xóa")
+            delete_btn.setMinimumWidth(80)
+            delete_btn.clicked.connect(lambda checked, m=ma_mon: self.handle_delete_subject(m))
+            
+            info_layout.addWidget(edit_btn)
+            info_layout.addWidget(delete_btn)
+            
+            group_layout.addLayout(info_layout)
+            
+            # Hiển thị số lượng lớp học
+            num_classes = len(mon_hoc.cac_lop_hoc)
+            classes_label = QLabel(f"Số lớp học: {num_classes}")
+            group_layout.addWidget(classes_label)
+            
+            self.scroll_layout.addWidget(group)
+    
+    def handle_edit_subject(self, mon_hoc):
+        """Xử lý sửa môn học"""
+        dialog = SubjectDialog(self, mon_hoc=mon_hoc)
+        if dialog.exec():
+            data = dialog.get_data()
+            if data:
+                # Cập nhật thông tin môn học
+                mon_hoc.ten_mon = data['ten_mon']
+                mon_hoc.tien_quyet = data['tien_quyet']
+                # Lưu dữ liệu
+                from ..data_handler import save_data
+                save_data(self.all_courses)
+                # Refresh lại danh sách
+                self._populate_subjects()
+                QMessageBox.information(self, "Thành công", f"Đã cập nhật môn {mon_hoc.ma_mon}")
+    
+    def handle_delete_subject(self, ma_mon):
+        """Xử lý xóa môn học"""
+        mon_hoc = self.all_courses.get(ma_mon)
+        if not mon_hoc:
+            return
+        
+        reply = QMessageBox.question(
+            self, 'Xác nhận xóa', 
+            f"Bạn có chắc muốn xóa môn '{mon_hoc.ten_mon}' ({ma_mon})?\n\nTất cả lớp học của môn này cũng sẽ bị xóa!",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            del self.all_courses[ma_mon]
+            # Lưu dữ liệu
+            from ..data_handler import save_data
+            save_data(self.all_courses)
+            # Refresh lại danh sách
+            self._populate_subjects()
+            QMessageBox.information(self, "Thành công", f"Đã xóa môn {ma_mon}")
+
+
+class EditAllClassesDialog(QDialog):
+    """Dialog để hiển thị và sửa/xóa tất cả lớp học (giống area các lớp học)"""
+    
+    def __init__(self, all_courses, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sửa lớp học")
+        self.setMinimumSize(1000, 700)
+        self.all_courses = all_courses
+        
+        layout = QVBoxLayout(self)
+        
+        # Scroll area để chứa các nhóm lớp
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        self.scroll_widget = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_widget)
+        self.scroll_layout.setSpacing(10)
+        
+        self._populate_all_classes()
+        
+        scroll.setWidget(self.scroll_widget)
+        layout.addWidget(scroll)
+        
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Close
+        )
+        buttons.rejected.connect(self.accept)
+        layout.addWidget(buttons)
+    
+    def _create_class_widget(self, lop, gio, is_first_row, mon_hoc):
+        """Tạo widget hiển thị thông tin một khung giờ của lớp học"""
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(10, 0, 0, 0)
+        
+        # Label mã lớp (chỉ hiển thị ở dòng đầu tiên)
+        if is_first_row:
+            ma_lop_label = QLabel(lop.ma_lop)
+        else:
+            ma_lop_label = QLabel("")
+        ma_lop_label.setStyleSheet("padding-left: 0px;")
+        layout.addWidget(ma_lop_label)
+        
+        # Label giờ học
+        gio_label = QLabel(f"Tiết {gio.tiet_bat_dau}-{gio.tiet_ket_thuc}")
+        gio_label.setStyleSheet("padding-left: 0px;")
+        layout.addWidget(gio_label)
+        
+        # Label thứ
+        ten_thu = TEN_THU_TRONG_TUAN.get(gio.thu, f"Thứ {gio.thu}")
+        thu_label = QLabel(ten_thu)
+        thu_label.setStyleSheet("padding-left: 10px;")
+        layout.addWidget(thu_label)
+        
+        # Label tên giáo viên (chỉ hiển thị ở dòng đầu tiên)
+        if is_first_row:
+            gv_label = QLabel(lop.ten_giao_vien)
+        else:
+            gv_label = QLabel("")
+        gv_label.setStyleSheet("padding-left: 0px;")
+        layout.addWidget(gv_label)
+        
+        # Label môn học (chỉ hiển thị ở dòng đầu tiên)
+        if is_first_row:
+            mon_label = QLabel(f"{mon_hoc.ten_mon} ({mon_hoc.ma_mon})")
+        else:
+            mon_label = QLabel("")
+        mon_label.setStyleSheet("padding-left: 10px;")
+        layout.addWidget(mon_label)
+        
+        # Nút sửa (chỉ hiển thị ở dòng đầu tiên)
+        if is_first_row:
+            edit_btn = QPushButton("Sửa")
+            edit_btn.setMinimumWidth(60)
+            edit_btn.clicked.connect(lambda: self.handle_edit_class(lop, mon_hoc))
+            layout.addWidget(edit_btn, 0)
+        else:
+            layout.addWidget(QLabel(""), 0)
+        
+        # Nút xóa (chỉ hiển thị ở dòng đầu tiên)
+        if is_first_row:
+            delete_btn = QPushButton("Xóa")
+            delete_btn.setMinimumWidth(60)
+            delete_btn.clicked.connect(lambda: self.handle_delete_class(lop, mon_hoc))
+            layout.addWidget(delete_btn, 0)
+        else:
+            layout.addWidget(QLabel(""), 0)
+        
+        return widget
+    
+    def handle_edit_class(self, lop, mon_hoc):
+        """Xử lý sửa lớp học"""
+        # Lấy khung giờ đầu tiên để điền sẵn vào dialog
+        default_thu = None
+        default_tiet_bd = None
+        default_tiet_kt = None
+        if lop.cac_khung_gio:
+            gio_dau = lop.cac_khung_gio[0]
+            default_thu = gio_dau.thu
+            default_tiet_bd = gio_dau.tiet_bat_dau
+            default_tiet_kt = gio_dau.tiet_ket_thuc
+        
+        dialog = ClassDialog(
+            self.all_courses,
+            default_thu=default_thu,
+            default_tiet=default_tiet_bd,
+            fixed_mon_hoc=mon_hoc,
+            lop_hoc_hien_tai=lop,
+            parent=self,
+        )
+        
+        # Điền sẵn thông tin lớp hiện tại
+        dialog.ma_lop_edit.setText(lop.ma_lop)
+        dialog.ten_gv_edit.setText(lop.ten_giao_vien)
+        dialog.loai_lop_combo.setCurrentText(getattr(lop, "loai_lop", "Lớp"))
+        # Set tiết kết thúc đúng
+        if default_tiet_kt:
+            dialog.tiet_kt_spin.setValue(default_tiet_kt)
+        # Populate lại list sau khi set loại lớp
+        dialog._populate_rang_buoc_list()
+        
+        if dialog.exec():
+            data = dialog.get_data()
+            if not data:
+                QMessageBox.warning(
+                    self,
+                    "Lỗi",
+                    "Vui lòng điền đủ thông tin và đảm bảo tiết bắt đầu <= tiết kết thúc.",
+                )
+                return
+            
+            # Tạo lớp tạm để kiểm tra trùng phòng học
+            from ..models import LopHoc
+            from ..scheduler import kiem_tra_trung_trong_cung_mon
+            old_id = lop.get_id()
+            temp_lop = LopHoc(
+                data["ma_lop"],
+                data["ten_gv"],
+                mon_hoc.ma_mon,
+                mon_hoc.ten_mon,
+                loai_lop=data.get("loai_lop", lop.loai_lop),
+                lop_rang_buoc=data.get("lop_rang_buoc", lop.lop_rang_buoc)
+            )
+            temp_lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
+            
+            # Kiểm tra trùng trong cùng môn (loại trừ lớp hiện tại)
+            is_valid, error_msg = kiem_tra_trung_trong_cung_mon(temp_lop, mon_hoc, exclude_lop_id=old_id)
+            if not is_valid:
+                QMessageBox.warning(self, "Lỗi", error_msg)
+                return
+            
+            # Cập nhật thông tin lớp hiện tại
+            lop.ma_lop = data["ma_lop"]
+            lop.ten_giao_vien = data["ten_gv"]
+            lop.loai_lop = data.get("loai_lop", lop.loai_lop)
+            lop.lop_rang_buoc = data.get("lop_rang_buoc", [])
+            # Cập nhật lại khung giờ
+            lop.cac_khung_gio.clear()
+            lop.them_khung_gio(data["thu"], data["tiet_bd"], data["tiet_kt"])
+            
+            # Nếu mã lớp thay đổi, cần cập nhật lại dict của môn học
+            if old_id != lop.get_id():
+                if old_id in mon_hoc.cac_lop_hoc_dict:
+                    del mon_hoc.cac_lop_hoc_dict[old_id]
+                mon_hoc.cac_lop_hoc_dict[lop.get_id()] = lop
+            
+            # Lưu và refresh lại giao diện
+            from ..data_handler import save_data
+            save_data(self.all_courses)
+            self._populate_all_classes()
+            QMessageBox.information(self, "Thành công", f"Đã cập nhật lớp {lop.ma_lop}")
+    
+    def handle_delete_class(self, lop, mon_hoc):
+        """Xử lý xóa lớp học"""
+        reply = QMessageBox.question(
+            self, 'Xác nhận xóa', 
+            f"Bạn có chắc muốn xóa lớp '{lop.ma_lop}' của môn '{mon_hoc.ten_mon}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            # Xóa khỏi danh sách lớp của môn học
+            if lop in mon_hoc.cac_lop_hoc:
+                mon_hoc.cac_lop_hoc.remove(lop)
+            # Xóa khỏi dict nếu có
+            lop_id = lop.get_id()
+            if lop_id in mon_hoc.cac_lop_hoc_dict:
+                del mon_hoc.cac_lop_hoc_dict[lop_id]
+            
+            # Lưu và refresh lại danh sách lớp
+            from ..data_handler import save_data
+            save_data(self.all_courses)
+            self._populate_all_classes()
+            QMessageBox.information(self, "Thành công", f"Đã xóa lớp {lop.ma_lop}")
+    
+    def _populate_all_classes(self):
+        """Điền danh sách tất cả lớp học vào scroll area"""
+        # Xóa tất cả widget cũ
+        while self.scroll_layout.count():
+            child = self.scroll_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        # Hiển thị theo từng môn học
+        for ma_mon in sorted(self.all_courses.keys()):
+            mon_hoc = self.all_courses[ma_mon]
+            if not mon_hoc.cac_lop_hoc:
+                continue
+            
+            # Group box cho mỗi môn học
+            mon_group = QGroupBox(f"{mon_hoc.ten_mon} ({ma_mon})")
+            mon_layout = QVBoxLayout(mon_group)
+            
+            # Phân loại các lớp theo loại
+            classes_by_type = {
+                "Lý thuyết": [],
+                "Bài tập": [],
+                "Lớp": []
+            }
+            
+            for lop in mon_hoc.cac_lop_hoc:
+                loai = getattr(lop, 'loai_lop', 'Lớp')
+                if loai in classes_by_type:
+                    classes_by_type[loai].append(lop)
+                else:
+                    classes_by_type["Lớp"].append(lop)
+            
+            # Hiển thị từng loại lớp
+            for loai_lop in ["Lý thuyết", "Bài tập", "Lớp"]:
+                if classes_by_type[loai_lop]:
+                    group = QGroupBox(loai_lop)
+                    group_layout = QVBoxLayout(group)
+                    
+                    # Header
+                    header_layout = QHBoxLayout()
+                    header_layout.setSpacing(20)
+                    header_layout.setContentsMargins(8, 0, 0, 0)
+                    header_layout.addWidget(QLabel("Phòng học"))
+                    header_layout.addWidget(QLabel("Giờ học"))
+                    header_layout.addWidget(QLabel("Thứ"))
+                    header_layout.addWidget(QLabel("GV"))
+                    header_layout.addWidget(QLabel("Môn học"))
+                    header_layout.addWidget(QLabel(""))  # Cho nút
+                    header_layout.addWidget(QLabel(""))  # Cho nút
+                    group_layout.addLayout(header_layout)
+                    
+                    # Hiển thị từng lớp
+                    for lop in classes_by_type[loai_lop]:
+                        # Hiển thị từng khung giờ của lớp
+                        for idx, gio in enumerate(lop.cac_khung_gio):
+                            class_widget = self._create_class_widget(lop, gio, idx == 0, mon_hoc)
+                            group_layout.addWidget(class_widget)
+                    
+                    mon_layout.addWidget(group)
+            
+            self.scroll_layout.addWidget(mon_group)
