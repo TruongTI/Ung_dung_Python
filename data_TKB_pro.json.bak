@@ -1,0 +1,33 @@
+{
+    "123": {
+        "ma_mon": "123",
+        "ten_mon": "123",
+        "cac_lop_hoc": [
+            {
+                "ma_lop": "12",
+                "ten_giao_vien": "21",
+                "ma_mon": "123",
+                "ten_mon": "123",
+                "cac_khung_gio": [
+                    {
+                        "thu": 2,
+                        "tiet_bat_dau": 1,
+                        "tiet_ket_thuc": 2
+                    }
+                ],
+                "color_hex": "#ADD8E6",
+                "loai_lop": "Lý thuyết",
+                "lop_rang_buoc": []
+            }
+        ],
+        "tien_quyet": [],
+        "color_hex": null
+    },
+    "1111": {
+        "ma_mon": "1111",
+        "ten_mon": "1111",
+        "cac_lop_hoc": [],
+        "tien_quyet": [],
+        "color_hex": null
+    }
+}
