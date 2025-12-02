@@ -2,6 +2,8 @@
 Các class model đại diện cho dữ liệu trong hệ thống
 """
 
+from .constants import MIN_THU, MAX_THU, MIN_TIET, MAX_TIET
+
 
 def chuan_hoa_ma_lop(ma_lop):
     """
@@ -29,12 +31,38 @@ def chuan_hoa_ten_giao_vien(ten_gv):
 
 
 class ThoiGianHoc:
-    """Đại diện cho một khung giờ học (thứ, tiết bắt đầu, tiết kết thúc)"""
-    
+    """Đại diện cho một khung giờ học (thứ, tiết bắt đầu, tiết kết thúc)
+
+    Validation:
+    - Thứ phải nằm trong khoảng [MIN_THU, MAX_THU]
+    - Tiết bắt đầu/kết thúc phải nằm trong khoảng [MIN_TIET, MAX_TIET]
+    - Tiết bắt đầu phải <= tiết kết thúc
+    """
+
     def __init__(self, thu, tiet_bat_dau, tiet_ket_thuc):
-        self.thu = int(thu)
-        self.tiet_bat_dau = int(tiet_bat_dau)
-        self.tiet_ket_thuc = int(tiet_ket_thuc)
+        thu = int(thu)
+        tiet_bat_dau = int(tiet_bat_dau)
+        tiet_ket_thuc = int(tiet_ket_thuc)
+
+        # Validate thứ
+        if not (MIN_THU <= thu <= MAX_THU):
+            raise ValueError(f"Thứ phải từ {MIN_THU}-{MAX_THU}, nhận được: {thu}")
+
+        # Validate tiết bắt đầu/kết thúc
+        if not (MIN_TIET <= tiet_bat_dau <= MAX_TIET):
+            raise ValueError(
+                f"Tiết bắt đầu phải từ {MIN_TIET}-{MAX_TIET}, nhận được: {tiet_bat_dau}"
+            )
+        if not (MIN_TIET <= tiet_ket_thuc <= MAX_TIET):
+            raise ValueError(
+                f"Tiết kết thúc phải từ {MIN_TIET}-{MAX_TIET}, nhận được: {tiet_ket_thuc}"
+            )
+        if tiet_bat_dau > tiet_ket_thuc:
+            raise ValueError("Tiết bắt đầu phải <= tiết kết thúc")
+
+        self.thu = thu
+        self.tiet_bat_dau = tiet_bat_dau
+        self.tiet_ket_thuc = tiet_ket_thuc
     
     def __str__(self):
         return f"[Thứ {self.thu}, Tiết {self.tiet_bat_dau}-{self.tiet_ket_thuc}]"
