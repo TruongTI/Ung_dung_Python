@@ -449,6 +449,40 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
     return ket_qua_da_loc, None, warning_msg
 
 
+def _tim_thu_trung_gio(lop_moi, danh_sach_lop):
+    """
+    Tìm các thứ trong tuần mà lop_moi bị trùng giờ với danh_sach_lop.
+    Dùng chung cho kiểm tra trùng phòng, trùng giáo viên, trùng trong cùng môn.
+    """
+    if not danh_sach_lop:
+        return set()
+
+    time_index = _build_time_index(danh_sach_lop)
+    cac_thu_trung = set()
+
+    for gio_moi in lop_moi.cac_khung_gio:
+        thu = gio_moi.thu
+        if thu not in time_index:
+            continue
+
+        for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
+            if tiet not in time_index[thu]:
+                continue
+
+            # Có lớp khác ở cùng thứ và tiết, kiểm tra xung đột chi tiết
+            for lop_khac in time_index[thu][tiet]:
+                for gio_cu in lop_khac.cac_khung_gio:
+                    if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
+                        ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
+                        cac_thu_trung.add(ten_thu)
+                        break  # Chỉ cần tìm một xung đột cho mỗi thứ là đủ
+                # Nếu đã ghi nhận xung đột cho thứ này, không cần kiểm tra thêm
+                if TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}") in cac_thu_trung:
+                    break
+
+    return cac_thu_trung
+
+
 def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
     """
     Kiểm tra xem lớp mới có trùng phòng học và trùng giờ với lớp khác không
@@ -477,29 +511,10 @@ def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
     # Nếu không có lớp nào cùng phòng, cho phép thêm
     if not cac_lop_cung_phong:
         return True, None
-    
-    # Tạo time index cho các lớp cùng phòng - O(n)
-    time_index = _build_time_index(cac_lop_cung_phong)
-    
-    # Kiểm tra xung đột bằng cách lookup trong index - O(n) thay vì O(n²)
-    cac_thu_trung = set()
-    for gio_moi in lop_moi.cac_khung_gio:
-        thu = gio_moi.thu
-        if thu in time_index:
-            # Kiểm tra các tiết trong khung giờ mới
-            for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
-                if tiet in time_index[thu]:
-                    # Có lớp cùng phòng ở cùng thứ và tiết, kiểm tra xung đột chi tiết
-                    for lop_cung_phong in time_index[thu][tiet]:
-                        # Kiểm tra tất cả khung giờ của lớp cùng phòng
-                        for gio_cu in lop_cung_phong.cac_khung_gio:
-                            if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                                ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
-                                cac_thu_trung.add(ten_thu)
-                                break  # Chỉ cần tìm một xung đột cho mỗi thứ là đủ
-                        if ten_thu in cac_thu_trung:
-                            break
-    
+
+    # Dùng helper chung để tìm các thứ bị trùng giờ
+    cac_thu_trung = _tim_thu_trung_gio(lop_moi, cac_lop_cung_phong)
+
     # Nếu có trùng giờ, báo lỗi
     if cac_thu_trung:
         error_msg = (f"Lỗi: Phòng học '{lop_moi.ma_lop}' đã được sử dụng vào "
@@ -539,48 +554,20 @@ def kiem_tra_trung_trong_cung_mon(lop_moi, mon_hoc, exclude_lop_id=None):
     cac_lop_cung_gv = [lop for lop in cac_lop_kiem_tra 
                        if lop.ten_giao_vien.strip().lower() == gv_key]
     
-    # Kiểm tra trùng phòng học và trùng giờ - sử dụng time index
+    # Kiểm tra trùng phòng học và trùng giờ - sử dụng helper chung
     if cac_lop_cung_phong:
-        time_index_phong = _build_time_index(cac_lop_cung_phong)
-        cac_thu_trung_phong = set()
-        
-        for gio_moi in lop_moi.cac_khung_gio:
-            thu = gio_moi.thu
-            if thu in time_index_phong:
-                for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
-                    if tiet in time_index_phong[thu]:
-                        # Kiểm tra xung đột chi tiết
-                        for lop_cung_phong in time_index_phong[thu][tiet]:
-                            for gio_cu in lop_cung_phong.cac_khung_gio:
-                                if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                                    ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
-                                    cac_thu_trung_phong.add(ten_thu)
-                                    break
-        
+        cac_thu_trung_phong = _tim_thu_trung_gio(lop_moi, cac_lop_cung_phong)
+
         if cac_thu_trung_phong:
             error_msg = (f"Lỗi: Phòng học '{lop_moi.ma_lop}' đã được sử dụng trong môn này vào "
                         f"{', '.join(sorted(cac_thu_trung_phong))}. "
                         f"Vui lòng chọn phòng khác hoặc thay đổi thời gian học.")
             return False, error_msg
     
-    # Kiểm tra trùng giáo viên và trùng giờ - sử dụng time index
+    # Kiểm tra trùng giáo viên và trùng giờ - sử dụng helper chung
     if cac_lop_cung_gv:
-        time_index_gv = _build_time_index(cac_lop_cung_gv)
-        cac_thu_trung_gv = set()
-        
-        for gio_moi in lop_moi.cac_khung_gio:
-            thu = gio_moi.thu
-            if thu in time_index_gv:
-                for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
-                    if tiet in time_index_gv[thu]:
-                        # Kiểm tra xung đột chi tiết
-                        for lop_cung_gv in time_index_gv[thu][tiet]:
-                            for gio_cu in lop_cung_gv.cac_khung_gio:
-                                if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                                    ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
-                                    cac_thu_trung_gv.add(ten_thu)
-                                    break
-        
+        cac_thu_trung_gv = _tim_thu_trung_gio(lop_moi, cac_lop_cung_gv)
+
         if cac_thu_trung_gv:
             error_msg = (f"Lỗi: Giáo viên '{lop_moi.ten_giao_vien}' đã có lớp khác trong môn này vào "
                         f"{', '.join(sorted(cac_thu_trung_gv))}. "
@@ -616,28 +603,10 @@ def kiem_tra_trung_giao_vien(lop_moi, all_courses, exclude_lop_id=None):
     # Nếu không có lớp nào cùng giáo viên, cho phép thêm
     if not cac_lop_cung_gv:
         return True, None
-    
-    # Tạo time index cho các lớp cùng giáo viên - O(n)
-    time_index = _build_time_index(cac_lop_cung_gv)
-    
-    # Kiểm tra xung đột bằng cách lookup trong index - O(n) thay vì O(n²)
-    cac_thu_trung = set()
-    for gio_moi in lop_moi.cac_khung_gio:
-        thu = gio_moi.thu
-        if thu in time_index:
-            for tiet in range(gio_moi.tiet_bat_dau, gio_moi.tiet_ket_thuc + 1):
-                if tiet in time_index[thu]:
-                    # Có lớp cùng giáo viên ở cùng thứ và tiết, kiểm tra xung đột chi tiết
-                    for lop_cung_gv in time_index[thu][tiet]:
-                        # Kiểm tra tất cả khung giờ của lớp cùng giáo viên
-                        for gio_cu in lop_cung_gv.cac_khung_gio:
-                            if gio_cu.thu == thu and kiem_tra_xung_dot_gio(gio_moi, gio_cu):
-                                ten_thu = TEN_THU_TRONG_TUAN.get(thu, f"Thứ {thu}")
-                                cac_thu_trung.add(ten_thu)
-                                break  # Chỉ cần tìm một xung đột cho mỗi thứ là đủ
-                        if ten_thu in cac_thu_trung:
-                            break
-    
+
+    # Dùng helper chung để tìm các thứ bị trùng giờ
+    cac_thu_trung = _tim_thu_trung_gio(lop_moi, cac_lop_cung_gv)
+
     # Nếu có trùng giờ, báo lỗi
     if cac_thu_trung:
         error_msg = (f"Lỗi: Giáo viên '{lop_moi.ten_giao_vien}' đã có lớp khác vào "
