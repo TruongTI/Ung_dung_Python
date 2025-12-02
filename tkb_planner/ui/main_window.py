@@ -19,7 +19,7 @@ from ..data_handler import (
     save_completed_courses, load_completed_courses,
     save_busy_times, load_busy_times
 )
-from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN
+from ..constants import DATA_FILE, TEN_THU_TRONG_TUAN, MAX_COURSES
 from .schedule_widget import ScheduleWidget
 from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCompletedCoursesDialog, EditAllSubjectsDialog, EditAllClassesDialog
 from .course_classes_dialog import CourseClassesDialog
@@ -327,6 +327,8 @@ class MainWindow(QMainWindow):
             check.set_allow_text_click(True)
             # Kết nối sự kiện click vào text để hiển thị các lớp của môn học
             check.textClicked.connect(lambda m=mon_hoc: self.handle_show_course_classes(m))
+            # Kết nối sự kiện stateChanged để kiểm tra giới hạn số môn
+            check.stateChanged.connect(lambda state, m=mon_hoc.ma_mon: self.handle_course_checkbox_changed(m, state))
             # Disable checkbox cho các môn đã có trong danh sách môn đã học
             if mon_hoc.ma_mon in self.completed_courses:
                 check.setEnabled(False)
@@ -494,10 +496,66 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Thành công", 
                                   f"Đã lưu dữ liệu vào file {DATA_FILE}")
 
+    def handle_course_checkbox_changed(self, ma_mon, state):
+        """Xử lý khi checkbox môn học thay đổi - kiểm tra giới hạn số môn"""
+        # Nếu đang bỏ chọn, không cần kiểm tra
+        if state == 0:  # Qt.CheckState.Unchecked
+            return
+        
+        # Đếm số môn đã chọn (bao gồm cả môn hiện tại vì checkbox đã được set)
+        selected_count = sum(
+            1 for widgets in self.course_widgets.values()
+            if widgets['check'].isChecked()
+        )
+        
+        # Nếu vượt quá giới hạn, không cho phép chọn thêm
+        if selected_count > MAX_COURSES:
+            # Bỏ chọn checkbox vừa click
+            if ma_mon in self.course_widgets:
+                self.course_widgets[ma_mon]['check'].blockSignals(True)
+                self.course_widgets[ma_mon]['check'].setChecked(False)
+                self.course_widgets[ma_mon]['check'].blockSignals(False)
+            
+            QMessageBox.warning(
+                self,
+                "Đã đạt giới hạn",
+                f"Chỉ được chọn tối đa {MAX_COURSES} môn học.\n"
+                f"Bạn đã chọn {selected_count - 1} môn. Vui lòng bỏ chọn một môn khác trước."
+            )
+            self.log_message(f"Đã đạt giới hạn {MAX_COURSES} môn học. Vui lòng bỏ chọn một môn khác.")
+    
     def handle_select_all(self, state):
-        """Chọn/bỏ chọn tất cả môn học"""
-        for widgets in self.course_widgets.values():
-            widgets['check'].setChecked(state)
+        """Chọn/bỏ chọn tất cả môn học (tôn trọng giới hạn MAX_COURSES)"""
+        if state:  # Nếu đang chọn tất cả
+            # Đếm số môn có thể chọn (không tính môn đã học)
+            available_courses = [
+                m for m, widgets in self.course_widgets.items()
+                if widgets['check'].isEnabled()
+            ]
+            
+            # Nếu số môn có thể chọn vượt quá giới hạn, chỉ chọn MAX_COURSES môn đầu tiên
+            if len(available_courses) > MAX_COURSES:
+                QMessageBox.warning(
+                    self,
+                    "Giới hạn số môn",
+                    f"Chỉ được chọn tối đa {MAX_COURSES} môn học.\n"
+                    f"Sẽ chỉ chọn {MAX_COURSES} môn đầu tiên."
+                )
+                # Chọn MAX_COURSES môn đầu tiên
+                for i, ma_mon in enumerate(available_courses):
+                    if i < MAX_COURSES:
+                        self.course_widgets[ma_mon]['check'].setChecked(True)
+                    else:
+                        self.course_widgets[ma_mon]['check'].setChecked(False)
+            else:
+                # Chọn tất cả nếu không vượt quá giới hạn
+                for widgets in self.course_widgets.values():
+                    if widgets['check'].isEnabled():
+                        widgets['check'].setChecked(True)
+        else:
+            # Bỏ chọn tất cả
+            for widgets in self.course_widgets.values():
+                widgets['check'].setChecked(False)
 
     def handle_clear_all_data(self):
         """Xóa toàn bộ môn học và lớp học"""
@@ -687,6 +745,18 @@ class MainWindow(QMainWindow):
         ]
         if not selected_courses:
             self.log_message("Vui lòng chọn ít nhất một môn học.")
+            QMessageBox.warning(self, "Chưa chọn môn", "Vui lòng chọn ít nhất một môn học.")
+            return
+        
+        # Kiểm tra giới hạn số môn học
+        if len(selected_courses) > MAX_COURSES:
+            self.log_message(f"Lỗi: Chỉ được chọn tối đa {MAX_COURSES} môn học. Bạn đã chọn {len(selected_courses)} môn.")
+            QMessageBox.warning(
+                self, 
+                "Vượt quá giới hạn", 
+                f"Chỉ được chọn tối đa {MAX_COURSES} môn học.\n"
+                f"Bạn đã chọn {len(selected_courses)} môn. Vui lòng bỏ chọn một số môn."
+            )
             return
         mandatory_courses = [
             ma_mon 

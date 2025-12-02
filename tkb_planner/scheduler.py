@@ -3,7 +3,7 @@ Logic xử lý tìm kiếm và kiểm tra xung đột thời khóa biểu
 """
 
 from .models import ThoiGianHoc, LichBan, LopHoc
-from .constants import TEN_THU_TRONG_TUAN
+from .constants import TEN_THU_TRONG_TUAN, MAX_COURSES
 
 
 def kiem_tra_xung_dot_gio(gio_A, gio_B):
@@ -215,6 +215,13 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
         - ket_qua: Danh sách các TKB hợp lệ (mỗi TKB là list các LopHoc)
         - error_msg: Thông báo lỗi nếu có (None nếu không có lỗi)
     """
+    # Kiểm tra giới hạn số môn học
+    if len(danh_sach_mon_hoc) > MAX_COURSES:
+        error_msg = (f"Lỗi: Chỉ được chọn tối đa {MAX_COURSES} môn học. "
+                    f"Bạn đã chọn {len(danh_sach_mon_hoc)} môn. "
+                    f"Vui lòng bỏ chọn một số môn.")
+        return [], error_msg
+    
     # Kiểm tra môn tiên quyết - môn tiên quyết phải có trong danh sách môn đã học
     completed_courses_set = set(completed_courses) if completed_courses else set()
     for mon in danh_sach_mon_hoc:

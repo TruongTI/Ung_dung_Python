@@ -15,3 +15,6 @@ COMPLETED_COURSES_FILE = "completed_courses.json"
 # Tên file lưu giờ bận
 BUSY_TIMES_FILE = "busy_times.json"
 
+# Giới hạn số môn học tối đa có thể chọn khi tìm TKB
+MAX_COURSES = 15
+
