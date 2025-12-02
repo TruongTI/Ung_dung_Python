@@ -18,3 +18,9 @@ BUSY_TIMES_FILE = "busy_times.json"
 # Giới hạn số môn học tối đa có thể chọn khi tìm TKB
 MAX_COURSES = 15
 
+# Giới hạn số lượng TKB tối đa có thể tìm được (để tránh treo ứng dụng)
+MAX_RESULTS = 1000
+
+# Timeout cho quá trình tìm kiếm TKB (giây)
+SEARCH_TIMEOUT = 30
+

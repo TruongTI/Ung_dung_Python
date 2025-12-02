@@ -767,11 +767,24 @@ class MainWindow(QMainWindow):
         active_busy_times = self._get_active_busy_times()
         self.log_message("Đang tìm kiếm TKB...")
         QApplication.processEvents()
-        self.danh_sach_tkb_tim_duoc, error_msg = tim_thoi_khoa_bieu(
-            selected_courses, active_busy_times, mandatory_courses, self.completed_courses, self.all_courses
+        
+        # Gọi hàm tìm TKB với max_results và timeout mặc định
+        result = tim_thoi_khoa_bieu(
+            selected_courses, active_busy_times, mandatory_courses, 
+            self.completed_courses, self.all_courses
         )
+        
+        # Xử lý kết quả (có thể có 2 hoặc 3 giá trị trả về tùy version)
+        if len(result) == 3:
+            self.danh_sach_tkb_tim_duoc, error_msg, warning_msg = result
+        else:
+            # Tương thích với code cũ (2 giá trị)
+            self.danh_sach_tkb_tim_duoc, error_msg = result
+            warning_msg = None
+        
         if error_msg:
             self.log_message(error_msg)
+            QMessageBox.warning(self, "Lỗi", error_msg)
             self.schedule_view.display_schedule([], self.all_courses, active_busy_times)
             self.current_tkb_index = -1
             self.update_tkb_info_label()
@@ -782,6 +795,9 @@ class MainWindow(QMainWindow):
             self.update_tkb_info_label()
         else:
             self.log_message(f"Tìm thấy {len(self.danh_sach_tkb_tim_duoc)} TKB phù hợp!")
+            if warning_msg:
+                self.log_message(f"⚠️ {warning_msg}")
+                QMessageBox.information(self, "Thông báo", warning_msg)
             self.show_tkb_at_index(0)
         self.update_nav_buttons()
 

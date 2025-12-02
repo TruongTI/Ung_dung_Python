@@ -2,8 +2,9 @@
 Logic xử lý tìm kiếm và kiểm tra xung đột thời khóa biểu
 """
 
+import time
 from .models import ThoiGianHoc, LichBan, LopHoc
-from .constants import TEN_THU_TRONG_TUAN, MAX_COURSES
+from .constants import TEN_THU_TRONG_TUAN, MAX_COURSES, MAX_RESULTS, SEARCH_TIMEOUT
 
 
 def kiem_tra_xung_dot_gio(gio_A, gio_B):
@@ -117,15 +118,38 @@ def _them_lop_rang_buoc(lop_hoc, lich_hien_tai, danh_sach_gio_ban, all_courses):
     
     return True  # Đã thêm tất cả lớp ràng buộc thành công
 
-def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses=None):
-    """Hàm đệ quy để tìm tất cả các thời khóa biểu hợp lệ"""
+def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses=None, max_results=None, start_time=None, timeout=None):
+    """
+    Hàm đệ quy để tìm tất cả các thời khóa biểu hợp lệ
+    
+    Args:
+        danh_sach_mon_hoc: Danh sách môn học
+        mon_hoc_index: Chỉ số môn học hiện tại
+        lich_hien_tai: Lịch hiện tại đang xây dựng
+        ket_qua: Danh sách kết quả (sẽ được cập nhật)
+        danh_sach_gio_ban: Danh sách giờ bận
+        all_courses: Dictionary tất cả môn học
+        max_results: Số lượng kết quả tối đa (None = không giới hạn)
+        start_time: Thời gian bắt đầu tìm kiếm (để tính timeout)
+        timeout: Timeout tính bằng giây (None = không timeout)
+    """
+    # Kiểm tra timeout
+    if timeout and start_time:
+        elapsed = time.time() - start_time
+        if elapsed > timeout:
+            return  # Dừng khi hết thời gian
+    
+    # Kiểm tra giới hạn số lượng kết quả
+    if max_results and len(ket_qua) >= max_results:
+        return  # Dừng khi đạt giới hạn
+    
     if mon_hoc_index == len(danh_sach_mon_hoc):
         ket_qua.append(list(lich_hien_tai))
         return
     
     mon_hien_tai = danh_sach_mon_hoc[mon_hoc_index]
     if not mon_hien_tai.cac_lop_hoc:
-        _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses)
+        _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses, max_results, start_time, timeout)
         return
     
     # Kiểm tra xem môn học này đã có lớp nào trong lịch chưa (do được thêm như một lớp ràng buộc)
@@ -138,7 +162,7 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
     
     # Nếu môn học đã có lớp trong lịch, bỏ qua và tiếp tục với môn tiếp theo
     if mon_da_co_lop_trong_lich:
-        _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses)
+        _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses, max_results, start_time, timeout)
         return
     
     for lop_hoc in mon_hien_tai.cac_lop_hoc:
@@ -180,7 +204,7 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
         lop_rang_buoc_da_them = []
         if _them_lop_rang_buoc(lop_hoc, lich_hien_tai, danh_sach_gio_ban, all_courses):
             # Đã thêm thành công các lớp ràng buộc, tiếp tục đệ quy
-            _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses)
+            _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index + 1, lich_hien_tai, ket_qua, danh_sach_gio_ban, all_courses, max_results, start_time, timeout)
         else:
             # Không thể thêm lớp ràng buộc do xung đột, bỏ qua lớp này
             pass
@@ -199,7 +223,7 @@ def _tim_kiem_de_quy(danh_sach_mon_hoc, mon_hoc_index, lich_hien_tai, ket_qua, d
                             break
 
 
-def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, completed_courses=None, all_courses=None):
+def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, completed_courses=None, all_courses=None, max_results=None, timeout=None):
     """
     Tìm tất cả các thời khóa biểu hợp lệ từ danh sách môn học
     
@@ -209,18 +233,26 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
         mon_bat_buoc: Danh sách mã môn bắt buộc phải có trong TKB
         completed_courses: Danh sách mã môn đã học (môn tiên quyết)
         all_courses: Dictionary chứa tất cả các môn học (để tìm lớp ràng buộc)
+        max_results: Số lượng kết quả tối đa (None = dùng MAX_RESULTS mặc định)
+        timeout: Timeout tính bằng giây (None = dùng SEARCH_TIMEOUT mặc định)
     
     Returns:
-        Tuple (ket_qua, error_msg): 
+        Tuple (ket_qua, error_msg, warning_msg): 
         - ket_qua: Danh sách các TKB hợp lệ (mỗi TKB là list các LopHoc)
         - error_msg: Thông báo lỗi nếu có (None nếu không có lỗi)
+        - warning_msg: Thông báo cảnh báo (ví dụ: đạt giới hạn, timeout)
     """
+    # Sử dụng giá trị mặc định nếu không được chỉ định
+    if max_results is None:
+        max_results = MAX_RESULTS
+    if timeout is None:
+        timeout = SEARCH_TIMEOUT
     # Kiểm tra giới hạn số môn học
     if len(danh_sach_mon_hoc) > MAX_COURSES:
         error_msg = (f"Lỗi: Chỉ được chọn tối đa {MAX_COURSES} môn học. "
                     f"Bạn đã chọn {len(danh_sach_mon_hoc)} môn. "
                     f"Vui lòng bỏ chọn một số môn.")
-        return [], error_msg
+        return [], error_msg, None
     
     # Kiểm tra môn tiên quyết - môn tiên quyết phải có trong danh sách môn đã học
     completed_courses_set = set(completed_courses) if completed_courses else set()
@@ -230,15 +262,29 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
                 error_msg = (f"Lỗi: Môn '{mon.ten_mon} ({mon.ma_mon})' yêu cầu "
                            f"phải học môn tiên quyết '{mon_tien_quyet}' trước. "
                            f"Vui lòng thêm môn '{mon_tien_quyet}' vào danh sách môn đã học.")
-                return [], error_msg
+                return [], error_msg, None
     
     # Tìm tất cả các TKB hợp lệ (truyền all_courses để xử lý ràng buộc)
     ket_qua_thuan = []
-    _tim_kiem_de_quy(danh_sach_mon_hoc, 0, [], ket_qua_thuan, danh_sach_gio_ban, all_courses)
+    start_time = time.time()
+    warning_msg = None
+    
+    # Gọi hàm đệ quy với timeout và max_results
+    _tim_kiem_de_quy(danh_sach_mon_hoc, 0, [], ket_qua_thuan, danh_sach_gio_ban, 
+                     all_courses, max_results, start_time, timeout)
+    
+    # Kiểm tra xem có đạt giới hạn hoặc timeout không
+    elapsed_time = time.time() - start_time
+    if len(ket_qua_thuan) >= max_results:
+        warning_msg = (f"Đã tìm được {len(ket_qua_thuan)} TKB (đạt giới hạn {max_results}). "
+                      f"Có thể còn nhiều TKB khác. Thời gian: {elapsed_time:.2f}s")
+    elif elapsed_time >= timeout * 0.9:  # Cảnh báo nếu gần hết thời gian
+        warning_msg = (f"Đã tìm được {len(ket_qua_thuan)} TKB. "
+                      f"Quá trình tìm kiếm gần hết thời gian ({elapsed_time:.2f}s/{timeout}s).")
     
     # Nếu không có môn bắt buộc, trả về tất cả kết quả
     if not mon_bat_buoc:
-        return ket_qua_thuan, None
+        return ket_qua_thuan, None, warning_msg
     
     # Lọc các TKB có chứa tất cả môn bắt buộc
     ket_qua_da_loc = []
@@ -248,7 +294,7 @@ def tim_thoi_khoa_bieu(danh_sach_mon_hoc, danh_sach_gio_ban, mon_bat_buoc, compl
         if ma_mon_bat_buoc.issubset(ma_mon_trong_tkb):
             ket_qua_da_loc.append(tkb)
     
-    return ket_qua_da_loc, None
+    return ket_qua_da_loc, None, warning_msg
 
 
 def kiem_tra_trung_phong_hoc(lop_moi, all_courses, exclude_lop_id=None):
