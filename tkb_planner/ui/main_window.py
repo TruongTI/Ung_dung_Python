@@ -4,10 +4,24 @@ Main window của ứng dụng TKB Planner Pro
 
 import datetime
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QLabel, QLineEdit, QPushButton, QCheckBox, QScrollArea, QFrame,
-    QTextBrowser, QStatusBar, QFileDialog, QMessageBox,
-    QTimeEdit, QSizePolicy, QComboBox
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QCheckBox,
+    QScrollArea,
+    QFrame,
+    QTextBrowser,
+    QStatusBar,
+    QFileDialog,
+    QMessageBox,
+    QTimeEdit,
+    QSizePolicy,
+    QComboBox,
 )
 from PyQt6.QtCore import Qt, QTime, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QAction
@@ -25,6 +39,7 @@ from .dialogs import SubjectDialog, ClassDialog, CompletedCoursesDialog, ViewCom
 from .course_classes_dialog import CourseClassesDialog
 from .theme import LIGHT_THEME, DARK_THEME
 from .custom_checkbox import CustomCheckBox
+from ..dpi_utils import get_scaled_font_size, get_screen_geometry
 
 
 class FindTKBThread(QThread):
@@ -76,12 +91,35 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Công cụ Sắp xếp TKB Pro")
-        self.setGeometry(100, 100, 1288, 900)  # Tăng chiều cao từ 780 lên 900
-        self.setFont(QFont("Segoe UI", 10))
-        
+
         # Load settings
         self.settings = QSettings("TKBPlanner", "TKBPlannerPro")
-        self.dark_mode = self.settings.value("dark_mode", True, type=bool)  # Mặc định là chế độ tối
+        self.dark_mode = self.settings.value(
+            "dark_mode", True, type=bool
+        )  # Mặc định là chế độ tối
+
+        # Thiết lập font chính theo DPI để hiển thị hài hòa trên laptop & PC
+        base_font_size = 10
+        scaled_font_size = get_scaled_font_size(base_font_size, min_size=9)
+        self.setFont(QFont("Segoe UI", scaled_font_size))
+
+        # Khôi phục vị trí/kích thước cửa sổ nếu đã lưu, nếu không thì đặt theo % màn hình
+        geometry = self.settings.value("geometry")
+        window_state = self.settings.value("windowState")
+        if geometry:
+            self.restoreGeometry(geometry)
+            if window_state:
+                self.restoreState(window_state)
+        else:
+            # Đặt kích thước khoảng 80% màn hình, canh giữa
+            screen_geo = get_screen_geometry()
+            width = int(screen_geo.width() * 0.8)
+            height = int(screen_geo.height() * 0.8)
+            self.resize(width, height)
+            self.move(
+                screen_geo.center().x() - width // 2,
+                screen_geo.center().y() - height // 2,
+            )
         
         create_sample_data_if_not_exists()
         self.all_courses = load_data()
@@ -105,6 +143,16 @@ class MainWindow(QMainWindow):
         # Hiển thị giờ bận ngay khi khởi động
         self._update_schedule_display()
         self.log_message("Chào mừng! Chọn môn học và giờ bận để bắt đầu.")
+
+    def closeEvent(self, event):
+        """Lưu lại geometry và state của cửa sổ khi đóng ứng dụng."""
+        try:
+            self.settings.setValue("geometry", self.saveGeometry())
+            self.settings.setValue("windowState", self.saveState())
+        except Exception:
+            # Không để lỗi save geometry chặn việc đóng app
+            pass
+        super().closeEvent(event)
 
     def _setup_ui(self):
         """Thiết lập giao diện người dùng"""

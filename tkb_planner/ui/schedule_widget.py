@@ -8,6 +8,7 @@ from PyQt6.QtGui import QFont, QPainter, QColor, QBrush, QPen, QFontMetrics
 from PyQt6.QtWidgets import QSizePolicy
 
 from ..constants import TEN_THU_TRONG_TUAN, MAX_TIET
+from ..dpi_utils import get_scaled_font_size
 
 
 class ScheduleWidget(QWidget):
@@ -94,10 +95,13 @@ class ScheduleWidget(QWidget):
         
         # Vẽ nền
         painter.fillRect(0, 0, self.width(), self.height(), bg_color)
-        
+
         painter.setPen(text_color)
         painter.fillRect(0, 0, self.TIME_COL_WIDTH, self.HEADER_HEIGHT, header_color)
-        painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+
+        # Font tiêu đề cột "Tiết" - scale theo DPI
+        header_font_size = get_scaled_font_size(10, min_size=9)
+        painter.setFont(QFont("Segoe UI", header_font_size, QFont.Weight.Bold))
         painter.drawText(0, 0, self.TIME_COL_WIDTH, self.HEADER_HEIGHT, 
                         Qt.AlignmentFlag.AlignCenter, "Tiết")
         
@@ -109,13 +113,14 @@ class ScheduleWidget(QWidget):
             current_day = self.start_of_week.addDays(i)
             date_str = current_day.toString("dd/MM")
             
-            # Vẽ "Thứ" ở trên
-            painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            # Vẽ "Thứ" ở trên (font đậm, scale theo DPI)
+            painter.setFont(QFont("Segoe UI", header_font_size, QFont.Weight.Bold))
             painter.setPen(text_color)
             painter.drawText(int(x), 0, int(self.CELL_WIDTH), int(self.HEADER_HEIGHT / 2), 
                            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom, thu_text)
-            # Vẽ "Ngày" ở dưới
-            painter.setFont(QFont("Segoe UI", 9))
+            # Vẽ "Ngày" ở dưới (font nhỏ hơn, scale theo DPI)
+            date_font_size = get_scaled_font_size(9, min_size=8)
+            painter.setFont(QFont("Segoe UI", date_font_size))
             painter.drawText(int(x), int(self.HEADER_HEIGHT / 2), int(self.CELL_WIDTH), 
                            int(self.HEADER_HEIGHT / 2), 
                            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop, date_str)
@@ -123,7 +128,8 @@ class ScheduleWidget(QWidget):
         painter.setPen(grid_color)
         text_color_grid = QColor("#e0e0e0") if is_dark else QColor("#000000")
         painter.setPen(text_color_grid)
-        painter.setFont(QFont("Segoe UI", 9))
+        tiet_font_size = get_scaled_font_size(9, min_size=8)
+        painter.setFont(QFont("Segoe UI", tiet_font_size))
         for tiet in range(1, self.MAX_TIET + 1):
             y = self.HEADER_HEIGHT + (tiet - 1) * self.CELL_HEIGHT
             painter.drawText(0, int(y), self.TIME_COL_WIDTH, int(self.CELL_HEIGHT), 
@@ -177,9 +183,10 @@ class ScheduleWidget(QWidget):
                 painter.drawRoundedRect(int(x)+2, int(y)+2, int(rect_width)-4, 
                                       int(rect_height)-4, 5, 5)
                 
-                # Vẽ text với font nhỏ hơn và màu khác
+                # Vẽ text với font nhỏ hơn và màu khác (scale theo DPI)
                 painter.setPen(text_color)
-                painter.setFont(QFont("Segoe UI", 9))  # Font nhỏ hơn (9 thay vì 12)
+                busy_font_size = get_scaled_font_size(9, min_size=8)
+                painter.setFont(QFont("Segoe UI", busy_font_size))
                 text_rect = int(x)+5, int(y)+5, int(rect_width)-10, int(rect_height)-10
                 text_flags = Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap
                 
@@ -228,8 +235,10 @@ class ScheduleWidget(QWidget):
                     # Tính tổng chiều cao của tất cả các phần text trước để căn giữa
                     # Lấy loại lớp (nếu có)
                     loai_lop = getattr(lop_hoc, 'loai_lop', 'Lớp')
-                    
-                    painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+
+                    # Font cho mã lớp / tiêu đề - scale theo DPI
+                    ma_lop_font_size = get_scaled_font_size(11, min_size=9)
+                    painter.setFont(QFont("Segoe UI", ma_lop_font_size, QFont.Weight.Bold))
                     # Hiển thị loại lớp nếu là Lý thuyết hoặc Bài tập
                     if loai_lop in ["Lý thuyết", "Bài tập"]:
                         ma_lop_text = f"[{loai_lop}] {lop_hoc.ma_lop}"
@@ -242,7 +251,8 @@ class ScheduleWidget(QWidget):
                     )
                     ma_lop_height = ma_lop_rect.height()
                     
-                    painter.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+                    ten_mon_font_size = get_scaled_font_size(10, min_size=9)
+                    painter.setFont(QFont("Segoe UI", ten_mon_font_size, QFont.Weight.Bold))
                     ten_mon_font_metrics = painter.fontMetrics()
                     ten_mon_rect = ten_mon_font_metrics.boundingRect(
                         text_rect_x, text_rect_y, text_rect_w, 0,
@@ -250,7 +260,8 @@ class ScheduleWidget(QWidget):
                     )
                     ten_mon_height = ten_mon_rect.height()
                     
-                    painter.setFont(QFont("Segoe UI", 9))
+                    normal_font_size = get_scaled_font_size(9, min_size=8)
+                    painter.setFont(QFont("Segoe UI", normal_font_size))
                     normal_font_metrics = painter.fontMetrics()
                     ma_mon_text = f"({lop_hoc.ma_mon})"
                     ma_mon_rect = normal_font_metrics.boundingRect(
