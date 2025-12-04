@@ -484,7 +484,6 @@ Môn đã học được dùng để kiểm tra môn tiên quyết.
   - `completed_courses.json`: Lưu danh sách môn đã học
   - `busy_times.json`: Lưu danh sách giờ bận
 - **Tự động lưu**: Dữ liệu được lưu tự động khi thêm/sửa/xóa
-- **Backup**: Nên backup các file JSON trước khi xóa toàn bộ dữ liệu
 
 ### ⏰ Về thời gian
 

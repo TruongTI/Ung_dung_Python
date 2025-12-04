@@ -29,6 +29,7 @@ wheels/
 
 # Data files
 data_TKB_pro.json
+data_TKB_pro.json.bak
 
 # IDE
 .vscode/
