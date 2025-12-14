@@ -1,7 +1,3 @@
-"""
-Main window của ứng dụng TKB Planner Pro
-"""
-
 import datetime
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -76,12 +72,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Công cụ Sắp xếp TKB Pro")
-        self.setGeometry(100, 100, 1288, 900)  # Tăng chiều cao từ 780 lên 900
+        self.setGeometry(100, 100, 1288, 900) 
         self.setFont(QFont("Segoe UI", 10))
         
-        # Load settings
         self.settings = QSettings("TKBPlanner", "TKBPlannerPro")
-        self.dark_mode = self.settings.value("dark_mode", True, type=bool)  # Mặc định là chế độ tối
+        self.dark_mode = self.settings.value("dark_mode", True, type=bool)
         
         create_sample_data_if_not_exists()
         self.all_courses = load_data()
